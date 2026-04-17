@@ -1,82 +1,57 @@
 # =============================================================================
-# config.py
-# All simulation and learning hyperparameters in one place.
-# Change values here — do NOT scatter magic numbers across files.
+# config.py — All hyperparameters in one place
 # =============================================================================
 
-# -----------------------------------------------------------------------------
-# Reproducibility
-# -----------------------------------------------------------------------------
 RANDOM_SEED = 42
 
-# -----------------------------------------------------------------------------
-# Simulation settings
-# -----------------------------------------------------------------------------
-SIM_DURATION = 10_000          # total simulation time (seconds)
-TASK_ARRIVAL_RATE = 4.0        # average tasks per second — creates realistic queue pressure
+# Simulation
+SIM_DURATION    = 10_000
+TASK_ARRIVAL_RATE = 6.0       # tasks/sec — creates 41% edge utilisation
 
-# Task properties (uniform random between min and max)
-TASK_SIZE_MIN = 1_000          # bits
-TASK_SIZE_MAX = 10_000         # bits
-TASK_COMPLEXITY_MIN = 100      # CPU cycles (millions)
-TASK_COMPLEXITY_MAX = 1_000    # CPU cycles (millions)
+TASK_SIZE_MIN    = 1_000      # bits
+TASK_SIZE_MAX    = 10_000
+TASK_COMPLEXITY_MIN = 100     # million CPU cycles
+TASK_COMPLEXITY_MAX = 1_000
 
-# -----------------------------------------------------------------------------
-# Device (Tier 1 — local)
-# -----------------------------------------------------------------------------
-DEVICE_CPU_SPEED = 500         # million CPU cycles per second
-DEVICE_POWER = 0.5             # Watts (active processing power)
+# Device (Tier 1)
+DEVICE_CPU_SPEED = 500
+DEVICE_POWER     = 0.5        # Watts
 
-# -----------------------------------------------------------------------------
-# Edge server (Tier 2)
-# -----------------------------------------------------------------------------
-EDGE_CPU_SPEED = 5_000         # million CPU cycles per second
-EDGE_BANDWIDTH = 20e6          # bits per second (20 Mbps wireless)
-EDGE_PROPAGATION_DELAY = 0.005 # seconds (5 ms)
-EDGE_QUEUE_CAPACITY = 10       # max tasks waiting in queue
+# Edge (Tier 2) — fast but single-server queue
+# Utilisation = 6 * (550/8000) = 41% → queue forms regularly
+EDGE_CPU_SPEED        = 8_000         # mcycles/sec
+EDGE_BANDWIDTH        = 20e6          # 20 Mbps
+EDGE_PROPAGATION_DELAY = 0.005        # 5 ms
+EDGE_QUEUE_CAPACITY   = 10
 
-# -----------------------------------------------------------------------------
-# Cloud server (Tier 3)
-# -----------------------------------------------------------------------------
-CLOUD_CPU_SPEED = 10_000       # million CPU cycles per second
-CLOUD_BANDWIDTH = 5e6          # bits per second (5 Mbps backhaul — bottleneck)
-CLOUD_PROPAGATION_DELAY = 0.08 # seconds (80 ms)
+# Cloud (Tier 3) — very fast CPU, good BW, but 100ms propagation
+# Cloud is better when edge queue wait > ~50ms
+CLOUD_CPU_SPEED        = 30_000       # mcycles/sec
+CLOUD_BANDWIDTH        = 20e6         # 20 Mbps
+CLOUD_PROPAGATION_DELAY = 0.1         # 100 ms
 
-# -----------------------------------------------------------------------------
 # Energy model
-# Energy = Power * Time  (Joules)
-# Transmission energy uses a fixed transmission power constant.
-# -----------------------------------------------------------------------------
-TRANSMISSION_POWER = 0.3       # Watts (radio transmission power)
+TRANSMISSION_POWER = 0.3              # Watts
 
-# -----------------------------------------------------------------------------
-# Q-Learning hyperparameters
-# -----------------------------------------------------------------------------
-LEARNING_RATE = 0.1            # alpha — how fast to update Q values
-DISCOUNT_FACTOR = 0.9          # gamma — how much to value future rewards
-EPSILON_START = 1.0            # start fully exploring
-EPSILON_END = 0.05             # minimum exploration rate
-EPSILON_DECAY = 0.995          # multiply epsilon by this each episode
-NUM_EPISODES = 1_000           # training episodes
+# Q-Learning
+LEARNING_RATE  = 0.15
+DISCOUNT_FACTOR = 0.9
+EPSILON_START  = 1.0
+EPSILON_END    = 0.05
+EPSILON_DECAY  = 0.998                # reaches min ~ep 1500
+NUM_EPISODES   = 2_000
 
-# -----------------------------------------------------------------------------
-# Reward function weights
-# reward = -(W_LATENCY * latency + W_ENERGY * energy)
-# -----------------------------------------------------------------------------
-W_LATENCY = 0.7                # latency is more important
-W_ENERGY = 0.3
+# Reward = -(W_LATENCY * latency + W_ENERGY * energy)
+W_LATENCY = 0.7
+W_ENERGY  = 0.3
 
-# -----------------------------------------------------------------------------
-# State discretization bins
-# The Q-table maps discrete states to Q-values.
-# -----------------------------------------------------------------------------
-QUEUE_BINS = [0, 3, 7]         # edge queue: [low, medium, high]
-TASK_SIZE_BINS = [3_000, 7_000]# task size: [small, medium, large]
-NETWORK_QUALITY_BINS = [0.4]   # channel quality 0–1: [poor, good]
+# State discretisation: (queue_bin, size_bin, net_bin)
+# queue: 0=empty  1-2=light  3-5=busy  6+=saturated
+QUEUE_BINS          = [1, 3, 6]
+TASK_SIZE_BINS      = [3_000, 7_000]
+NETWORK_QUALITY_BINS = [0.4, 0.75]
 
-# -----------------------------------------------------------------------------
 # Actions
-# -----------------------------------------------------------------------------
 ACTION_LOCAL = 0
 ACTION_EDGE  = 1
 ACTION_CLOUD = 2

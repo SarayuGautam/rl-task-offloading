@@ -1,189 +1,78 @@
 # =============================================================================
-# evaluation/visualizer.py
-# Module 6C: Visualization Techniques
-#
-# Generates 4 plots:
-#   1. Learning curve (reward over episodes with moving average)
-#   2. Comparison bar chart (avg latency — Q-Learning vs baselines)
-#   3. Q-value heatmap (learned policy across state space)
-#   4. Action distribution over training (how behaviour evolves)
+# evaluation/visualizer.py — Charts for Module 6C
 # =============================================================================
-
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import os
-from typing import List, Optional
 
 
-# Colour palette — consistent across all plots
-COLORS = {
-    'Q-Learning'   : '#2E86AB',
-    'Always Local' : '#A23B72',
-    'Always Edge'  : '#F18F01',
-    'Always Cloud' : '#C73E1D',
-    'Random'       : '#8E8E8E',
-}
-
-
-def plot_learning_curve(
-    episode_rewards: List[float],
-    window: int = 50,
-    save_path: Optional[str] = None,
-):
-    """
-    Plot 1: reward vs episode with a moving-average smoothing.
-    Shows the agent improving from random exploration to stable policy.
-    """
-    rewards = np.array(episode_rewards)
-    episodes = np.arange(1, len(rewards) + 1)
-
-    # Moving average
-    ma = np.convolve(rewards, np.ones(window) / window, mode='valid')
-    ma_x = np.arange(window, len(rewards) + 1)
-
+def learning_curve(episode_rewards: list, save_path: str, window: int = 50):
+    """Reward over training episodes with moving average."""
     fig, ax = plt.subplots(figsize=(9, 4))
-    ax.plot(episodes, rewards, alpha=0.25, color=COLORS['Q-Learning'], linewidth=0.8, label='Episode reward')
-    ax.plot(ma_x, ma, color=COLORS['Q-Learning'], linewidth=2.0, label=f'{window}-ep moving avg')
-
-    ax.set_xlabel('Episode', fontsize=12)
-    ax.set_ylabel('Total Reward', fontsize=12)
-    ax.set_title('Q-Learning: reward convergence over training', fontsize=13)
-    ax.legend(fontsize=11)
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-
-    if save_path:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, dpi=150)
-        print(f'Saved → {save_path}')
-    plt.show()
-    plt.close()
+    eps = range(1, len(episode_rewards) + 1)
+    ax.plot(eps, episode_rewards, alpha=0.25, color='steelblue', linewidth=0.8, label='Episode reward')
+    if len(episode_rewards) >= window:
+        ma = np.convolve(episode_rewards, np.ones(window)/window, mode='valid')
+        ax.plot(range(window, len(episode_rewards)+1), ma, color='steelblue', linewidth=2,
+                label=f'{window}-ep moving avg')
+    ax.set_xlabel('Episode'); ax.set_ylabel('Total reward')
+    ax.set_title('Q-Learning: reward convergence over training')
+    ax.legend(); ax.grid(alpha=0.3)
+    fig.tight_layout()
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    fig.savefig(save_path, dpi=150); plt.close(fig)
+    print(f"Saved: {save_path}")
 
 
-def plot_comparison_bars(
-    all_metrics: dict,
-    metric: str = 'avg_latency',
-    ylabel: str = 'Average Latency (s)',
-    title: str = 'Average Latency: Q-Learning vs Baselines',
-    save_path: Optional[str] = None,
-):
-    """
-    Plot 2: bar chart comparing Q-Learning vs each baseline strategy.
-    """
-    names  = list(all_metrics.keys())
-    values = [all_metrics[n][metric] for n in names]
-    colors = [COLORS.get(n, '#555555') for n in names]
-
+def comparison_bar(results: dict, metric: str, save_path: str):
+    """Bar chart comparing agents on a single metric."""
+    labels = list(results.keys())
+    values = [results[k][metric] for k in labels]
+    colors = ['#e07b54' if k == 'Q-Learning' else '#aab7c4' for k in labels]
     fig, ax = plt.subplots(figsize=(8, 4))
-    bars = ax.bar(names, values, color=colors, edgecolor='white', linewidth=0.5)
-
-    # Annotate bars
+    bars = ax.bar(labels, values, color=colors, edgecolor='white', width=0.55)
     for bar, val in zip(bars, values):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + max(values) * 0.01,
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(values)*0.01,
                 f'{val:.4f}', ha='center', va='bottom', fontsize=9)
-
-    # Highlight Q-Learning bar
-    if 'Q-Learning' in names:
-        idx = names.index('Q-Learning')
-        bars[idx].set_edgecolor('#1a1a1a')
-        bars[idx].set_linewidth(2)
-
-    ax.set_ylabel(ylabel, fontsize=12)
-    ax.set_title(title, fontsize=13)
-    ax.tick_params(axis='x', labelsize=10)
-    ax.grid(True, axis='y', alpha=0.3)
-    plt.tight_layout()
-
-    if save_path:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, dpi=150)
-        print(f'Saved → {save_path}')
-    plt.show()
-    plt.close()
+    ax.set_ylabel(metric.replace('_', ' ').title())
+    ax.set_title(f'Strategy comparison: {metric.replace("_"," ")}')
+    ax.grid(axis='y', alpha=0.3); fig.tight_layout()
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    fig.savefig(save_path, dpi=150); plt.close(fig)
+    print(f"Saved: {save_path}")
 
 
-def plot_qtable_heatmap(
-    q_table: dict,
-    save_path: Optional[str] = None,
-):
-    """
-    Plot 3: heatmap of Q-values showing learned policy across state space.
-    Each row = a state, each column = an action (Local/Edge/Cloud).
-    The brightest cell = greedy action chosen.
-    """
-    if not q_table:
-        print('Q-table is empty — skipping heatmap')
-        return
-
-    states = sorted(q_table.keys())
-    q_matrix = np.array([q_table[s] for s in states])
-
-    fig, ax = plt.subplots(figsize=(6, max(3, len(states) * 0.5)))
-    im = ax.imshow(q_matrix, aspect='auto', cmap='Blues')
-
-    ax.set_xticks([0, 1, 2])
-    ax.set_xticklabels(['Local', 'Edge', 'Cloud'], fontsize=11)
-    ax.set_yticks(range(len(states)))
-    ax.set_yticklabels([f'State {s}' for s in states], fontsize=9)
-    ax.set_title('Q-table: learned action values per state\n(darker = higher value = preferred)', fontsize=11)
-
-    # Mark the greedy (best) action per row with a white star
-    for i, row in enumerate(q_matrix):
-        best = int(np.argmax(row))
-        ax.text(best, i, '★', ha='center', va='center', fontsize=14, color='white')
-
-    plt.colorbar(im, ax=ax, label='Q-value')
-    plt.tight_layout()
-
-    if save_path:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, dpi=150)
-        print(f'Saved → {save_path}')
-    plt.show()
-    plt.close()
-
-
-def plot_improvement_summary(
-    all_metrics: dict,
-    ql_key: str = 'Q-Learning',
-    save_path: Optional[str] = None,
-):
-    """
-    Plot 4: horizontal bar chart of % latency improvement over each baseline.
-    Positive = Q-Learning wins.
-    """
-    from src.evaluation.metrics import improvement_over
-
-    if ql_key not in all_metrics:
-        print('Q-Learning metrics not found — skipping improvement plot')
-        return
-
-    baselines = [n for n in all_metrics if n != ql_key]
-    ql = all_metrics[ql_key]
-    improvements = [improvement_over(ql, all_metrics[b], 'avg_latency') for b in baselines]
-    bar_colors   = [COLORS.get(b, '#555555') for b in baselines]
-
-    fig, ax = plt.subplots(figsize=(7, 3.5))
-    bars = ax.barh(baselines, improvements, color=bar_colors, edgecolor='white')
-
-    for bar, val in zip(bars, improvements):
-        xpos = val + 0.5 if val >= 0 else val - 0.5
-        align = 'left' if val >= 0 else 'right'
-        ax.text(xpos, bar.get_y() + bar.get_height() / 2,
-                f'{val:+.1f}%', va='center', ha=align, fontsize=10, fontweight='bold')
-
-    ax.axvline(0, color='black', linewidth=0.8)
-    ax.axvline(10, color='green', linewidth=1.2, linestyle='--', label='10% target')
-    ax.set_xlabel('Latency improvement (%)', fontsize=12)
-    ax.set_title('Q-Learning latency improvement over each baseline', fontsize=12)
-    ax.legend(fontsize=10)
-    ax.grid(True, axis='x', alpha=0.3)
-    plt.tight_layout()
-
-    if save_path:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, dpi=150)
-        print(f'Saved → {save_path}')
-    plt.show()
-    plt.close()
+def qtable_heatmap(q_table: dict, save_path: str):
+    """Heatmap of greedy actions across state dimensions."""
+    import matplotlib.patches as mpatches
+    action_names  = ['Local', 'Edge', 'Cloud']
+    action_colors = ['#f0a500', '#2196F3', '#4caf50']
+    fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
+    queue_levels = [0, 1, 2, 3]; size_levels = [0, 1, 2]; net_levels = [0, 1, 2]
+    for ax_idx, net_bin in enumerate(net_levels):
+        grid = np.full((len(size_levels), len(queue_levels)), -1)
+        for qi, q in enumerate(queue_levels):
+            for si, s in enumerate(size_levels):
+                st = (q, s, net_bin)
+                if st in q_table:
+                    grid[si, qi] = int(np.argmax(q_table[st]))
+        im = axes[ax_idx].imshow(grid, cmap=matplotlib.colors.ListedColormap(action_colors),
+                                  vmin=0, vmax=2, aspect='auto')
+        axes[ax_idx].set_xticks(range(4)); axes[ax_idx].set_xticklabels(['empty','1-2','3-5','6+'])
+        axes[ax_idx].set_yticks(range(3)); axes[ax_idx].set_yticklabels(['small','med','large'])
+        axes[ax_idx].set_xlabel('Edge queue'); axes[ax_idx].set_ylabel('Task size')
+        axes[ax_idx].set_title(f'Net quality: {["poor","ok","good"][net_bin]}')
+        for qi in range(4):
+            for si in range(3):
+                if grid[si, qi] >= 0:
+                    axes[ax_idx].text(qi, si, action_names[grid[si, qi]][0],
+                                      ha='center', va='center', fontsize=10, color='white', fontweight='bold')
+    patches = [mpatches.Patch(color=c, label=n) for c, n in zip(action_colors, action_names)]
+    fig.legend(handles=patches, loc='upper right', fontsize=9)
+    fig.suptitle('Learned policy: greedy action per state (L=Local, E=Edge, C=Cloud)')
+    fig.tight_layout()
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    fig.savefig(save_path, dpi=150); plt.close(fig)
+    print(f"Saved: {save_path}")
