@@ -1,12 +1,7 @@
 # =============================================================================
 # environment/simulation.py
-#
-# Main SimPy simulation — ties together task generator, servers, agent.
-# The agent plugs in via the `agent` parameter.  Swap any agent freely.
-#
-# Usage:
-#   sim = Simulation(agent=QLearningAgent())
-#   tasks = sim.run(duration=500)
+# Month 2 update: network quality now changes WITHIN each episode (mobility).
+# New state dimensions: velocity_bin, quality_trend_bin.
 # =============================================================================
 
 import simpy
@@ -25,6 +20,7 @@ from src.config import (
     ACTION_LOCAL, ACTION_EDGE, ACTION_CLOUD, ACTION_NAMES,
     W_LATENCY, W_ENERGY,
     QUEUE_BINS, TASK_SIZE_BINS, NETWORK_QUALITY_BINS,
+    VELOCITY_BINS, QUALITY_TREND_BINS,
 )
 from src.environment.task_generator import Task
 from src.environment.edge_server import EdgeServer
@@ -36,14 +32,13 @@ class Simulation:
     """
     Discrete-event simulation of a three-tier MEC system.
 
-    Each episode the network quality is randomly drawn from [0.5, 1.0]
-    so the agent experiences all network quality bins during training.
-
-    Args:
-        agent          : any BaseAgent subclass
-        seed           : random seed for reproducibility
-        log_path       : optional CSV output path
-        network_quality: fixed quality override (None = random per episode)
+    Month 2 changes:
+    - network_quality now changes every N tasks within an episode
+      (simulates device moving through areas of varying signal strength)
+    - velocity added as a simulation parameter — higher velocity = more
+      volatile quality changes (vehicle vs pedestrian vs stationary)
+    - State now includes velocity_bin and quality_trend_bin
+    - use_mobility=False gives Month 1 behaviour for backward compatibility
     """
 
     def __init__(
@@ -52,27 +47,25 @@ class Simulation:
         seed: int = RANDOM_SEED,
         log_path: Optional[str] = None,
         network_quality: Optional[float] = None,
+        velocity: float = 0.0,
+        use_mobility: bool = False,
     ):
-        self.agent = agent
-        self.seed = seed
-        self.log_path = log_path
+        self.agent        = agent
+        self.seed         = seed
+        self.log_path     = log_path
         self._fixed_quality = network_quality
+        self.velocity     = velocity          # 0.0=stationary, 1.0=fast vehicle
+        self.use_mobility = use_mobility
 
         self.completed_tasks: List[Task] = []
         self._episode_reward = 0.0
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def run(self, duration: float = 500.0) -> List[Task]:
-        """Run simulation for `duration` seconds. Returns completed tasks."""
         self.completed_tasks = []
         self._episode_reward = 0.0
 
         rng = np.random.default_rng(self.seed)
 
-        # Network quality: fixed override OR random in [0.5, 1.0]
         if self._fixed_quality is not None:
             net_quality = self._fixed_quality
         else:
@@ -82,7 +75,10 @@ class Simulation:
         edge  = EdgeServer(env)
         cloud = CloudServer(env)
 
-        env.process(self._arrival_loop(env, edge, cloud, rng, net_quality))
+        # Shared mutable state for network quality (changes during episode)
+        state_container = {"quality": net_quality, "prev_quality": net_quality}
+
+        env.process(self._arrival_loop(env, edge, cloud, rng, state_container))
         env.run(until=duration)
 
         if self.log_path:
@@ -94,46 +90,40 @@ class Simulation:
     def total_reward(self) -> float:
         return self._episode_reward
 
-    # ------------------------------------------------------------------
-    # SimPy processes
-    # ------------------------------------------------------------------
-
-    def _arrival_loop(self, env, edge, cloud, rng, net_quality):
-        """Poisson arrivals — spawn one handler process per task."""
+    def _arrival_loop(self, env, edge, cloud, rng, sc):
         task_id = 0
         while True:
             inter_arrival = rng.exponential(1.0 / TASK_ARRIVAL_RATE)
             yield env.timeout(inter_arrival)
             task_id += 1
+
+            # Mobility: update quality every 20 tasks if use_mobility=True
+            if self.use_mobility and task_id % 20 == 0:
+                sc["prev_quality"] = sc["quality"]
+                volatility = 0.03 + 0.07 * self.velocity  # faster = more change
+                change = rng.normal(0, volatility)
+                sc["quality"] = float(np.clip(sc["quality"] + change, 0.1, 1.0))
+
             task = Task(
                 task_id=task_id,
                 arrival_time=env.now,
                 size_bits=float(rng.uniform(TASK_SIZE_MIN, TASK_SIZE_MAX)),
                 complexity=float(rng.uniform(TASK_COMPLEXITY_MIN, TASK_COMPLEXITY_MAX)),
             )
-            env.process(self._handle_task(env, task, edge, cloud, rng, net_quality))
+            env.process(self._handle_task(env, task, edge, cloud, rng, sc))
 
-    def _handle_task(self, env, task: Task, edge: EdgeServer, cloud: CloudServer,
-                     rng, net_quality: float):
-        """Process one task: observe → act → execute → reward → learn."""
-        state = self._observe(task, edge, net_quality)
-
-        # Agent picks action
+    def _handle_task(self, env, task: Task, edge: EdgeServer, cloud: CloudServer, rng, sc):
+        state = self._observe(task, edge, sc)
         action = self.agent.act(state) if self.agent else ACTION_EDGE
-
         task.action_taken = action
 
-        # Execute and compute cost
         if action == ACTION_LOCAL:
             latency, energy = local_cost(task.size_bits, task.complexity)
             yield env.timeout(latency)
-
         elif action == ACTION_EDGE:
-            # SimPy handles real queue wait; formula gives full latency
             queue_wait = yield env.process(edge.process(task))
             latency, energy = edge_cost(task.size_bits, task.complexity, queue_wait)
-
-        else:  # ACTION_CLOUD
+        else:
             yield env.process(cloud.process(task))
             latency, energy = cloud_cost(task.size_bits, task.complexity)
 
@@ -145,33 +135,28 @@ class Simulation:
         self._episode_reward += reward
 
         if self.agent and hasattr(self.agent, 'learn'):
-            next_state = self._observe(task, edge, net_quality)
+            next_state = self._observe(task, edge, sc)
             self.agent.learn(state, action, reward, next_state)
 
         self.completed_tasks.append(task)
         yield env.timeout(0)
 
-    # ------------------------------------------------------------------
-    # State builder
-    # ------------------------------------------------------------------
-
-    def _observe(self, task: Task, edge: EdgeServer, net_quality: float) -> tuple:
+    def _observe(self, task: Task, edge: EdgeServer, sc: dict) -> tuple:
         """
-        Discrete state = (queue_bin, task_size_bin, network_quality_bin)
-
-        All three dimensions vary meaningfully:
-          - queue_bin: 0 (empty) … 3 (saturated)
-          - size_bin:  0 (small) … 2 (large)
-          - net_bin:   0 (poor)  … 2 (good)
+        Month 1 state: (queue_bin, size_bin, net_bin)
+        Month 2 state: (queue_bin, size_bin, net_bin, velocity_bin, trend_bin)
         """
         queue_bin = int(np.digitize(edge.queue_length, QUEUE_BINS))
-        size_bin  = int(np.digitize(task.size_bits,    TASK_SIZE_BINS))
-        net_bin   = int(np.digitize(net_quality,       NETWORK_QUALITY_BINS))
-        return (queue_bin, size_bin, net_bin)
+        size_bin  = int(np.digitize(task.size_bits, TASK_SIZE_BINS))
+        net_bin   = int(np.digitize(sc["quality"], NETWORK_QUALITY_BINS))
 
-    # ------------------------------------------------------------------
-    # CSV logging
-    # ------------------------------------------------------------------
+        if self.use_mobility:
+            vel_bin   = int(np.digitize(self.velocity, VELOCITY_BINS))
+            trend     = sc["quality"] - sc["prev_quality"]
+            trend_bin = int(np.digitize(trend, QUALITY_TREND_BINS))
+            return (queue_bin, size_bin, net_bin, vel_bin, trend_bin)
+
+        return (queue_bin, size_bin, net_bin)
 
     def _write_csv(self):
         os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
@@ -180,9 +165,7 @@ class Simulation:
             w.writerow(['task_id','arrival_time','size_bits','complexity',
                         'action','latency','energy'])
             for t in self.completed_tasks:
-                w.writerow([
-                    t.task_id, round(t.arrival_time, 4),
-                    round(t.size_bits, 1), round(t.complexity, 1),
-                    ACTION_NAMES[t.action_taken],
-                    round(t.latency, 6), round(t.energy, 8),
-                ])
+                w.writerow([t.task_id, round(t.arrival_time,4),
+                            round(t.size_bits,1), round(t.complexity,1),
+                            ACTION_NAMES[t.action_taken],
+                            round(t.latency,6), round(t.energy,8)])
