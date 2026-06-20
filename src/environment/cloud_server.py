@@ -1,21 +1,21 @@
 # =============================================================================
 # environment/cloud_server.py
 #
-# Models a distant cloud data center — effectively unlimited compute power
+# Models a distant cloud data center - effectively unlimited compute power
 # but high fixed propagation delay.
 # No queue needed: cloud always accepts immediately.
 # =============================================================================
 
 import simpy
 from src.config import CLOUD_CPU_SPEED, CLOUD_PROPAGATION_DELAY
-from environment.network_model import compute_time
+from src.environment.network_model import compute_time
 
 
 class CloudServer:
     """
     Simulates a remote cloud data center.
 
-    No resource contention — unlimited parallel capacity.
+    No resource contention - unlimited parallel capacity.
     The cost is purely the propagation delay (100ms+).
     """
 

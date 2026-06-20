@@ -1,4 +1,4 @@
-# Adaptive Reinforcement Learning for Task Offloading in Edge-Cloud Federated Systems
+# Reinforcement Learning for Task Offloading in 3-tier Device-Edge-Cloud Systems
 
 **EGPG 600 — Problem Assessment Project**
 Sarayu Gautam, Kathmandu University, Department of CSE
@@ -29,23 +29,45 @@ src/
     metrics.py           ← Latency, energy, composite cost
     visualizer.py        ← Learning curves, heatmaps
     statistical_tests.py ← Confidence intervals, hypothesis tests
+    queue_validation.py  ← M/M/1 validity check (simulation correctness)
+    pareto.py            ← Latency-energy Pareto trade-off sweep (§2.7 contribution)
 main.py                  ← CLI runner
 ```
+
+## Channel model (Shannon-Hartley)
+
+Transmission rate is **not** constant — it follows `rate = B · log₂(1 + SNR)`,
+where SNR is derived from `network_quality`. A poor signal means a lower rate,
+so the same task takes longer and costs more energy to offload. This is what
+makes the agent's `network_quality` state causally affect the reward (and what
+gives the Month 2 mobility work its effect). See `src/environment/network_model.py`.
 
 ## Quick start
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# The venv was created under an old path; install with python -m pip:
+./venv/bin/python -m pip install -r requirements.txt
 
-# Run all baselines (compare strategies)
-python main.py --agent all
+# Run all baselines + Q-Learning (compare strategies)
+./venv/bin/python main.py --agent all
 
-# Train Q-Learning agent (500 episodes)
-python main.py --agent qlearning --episodes 500
+# Train Q-Learning agent and save the 3 thesis charts
+./venv/bin/python main.py --agent qlearning --episodes 2000 --charts
+
+# Month 2 mobility mode (network quality changes within an episode)
+./venv/bin/python main.py --agent qlearning --mobility --velocity 0.8
+
+# 5-seed statistical validation (95% confidence intervals)
+./venv/bin/python main.py --agent stats
+
+# Validate the simulation engine against M/M/1 queuing theory
+./venv/bin/python main.py --agent validate
+
+# Pareto latency-energy trade-off curve (sweeps the reward weights)
+./venv/bin/python main.py --agent pareto
 
 # Run a single baseline
-python main.py --agent random
+./venv/bin/python main.py --agent random
 ```
 
 ## Git milestones

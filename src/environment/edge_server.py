@@ -1,13 +1,13 @@
 # =============================================================================
 # environment/edge_server.py
 #
-# Models the edge server as a SimPy Resource — tasks queue up when busy.
+# Models the edge server as a SimPy Resource - tasks queue up when busy.
 # This is the key difference from cloud (which has unlimited capacity).
 # =============================================================================
 
 import simpy
 from src.config import EDGE_QUEUE_CAPACITY, EDGE_CPU_SPEED
-from environment.network_model import compute_time
+from src.environment.network_model import compute_time
 
 
 class EdgeServer:
@@ -15,7 +15,7 @@ class EdgeServer:
     Simulates a nearby MEC server with limited capacity.
 
     Uses simpy.Resource so tasks automatically queue when the server
-    is busy — this creates realistic queue_wait times that the RL agent
+    is busy - this creates realistic queue_wait times that the RL agent
     must learn to avoid.
 
     Attributes:

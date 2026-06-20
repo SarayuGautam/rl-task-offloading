@@ -1,7 +1,7 @@
 # =============================================================================
 # agent/dqn_agent.py
 #
-# Deep Q-Network (DQN) agent — scaffold for 15-credit thesis extension.
+# Deep Q-Network (DQN) agent - scaffold for 15-credit thesis extension.
 # Module 5D: "Preparing for Thesis Extension"
 #
 # STATUS: Stub only. The interface matches QLearningAgent exactly so the
@@ -21,7 +21,7 @@ from src.agent.base_agent import BaseAgent
 
 class DQNAgent(BaseAgent):
     """
-    Deep Q-Network agent — THESIS PLACEHOLDER.
+    Deep Q-Network agent - THESIS PLACEHOLDER.
 
     Same act() / learn() interface as QLearningAgent.
     Simulation.py works without any changes.
@@ -38,7 +38,7 @@ class DQNAgent(BaseAgent):
         # self.replay_buffer = ReplayBuffer(capacity=10_000)
         # self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=1e-3)
 
-        print("DQNAgent: stub only — implement for thesis")
+        print("DQNAgent: stub only - implement for thesis")
 
     def act(self, state: Tuple) -> int:
         # TODO: replace with neural network forward pass

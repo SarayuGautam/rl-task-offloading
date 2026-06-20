@@ -1,7 +1,7 @@
 # =============================================================================
 # agent/q_learning_agent.py
 #
-# Tabular Q-Learning agent — Module 3 of the curriculum.
+# Tabular Q-Learning agent - Module 3 of the curriculum.
 #
 # HOW IT WORKS:
 #   - Maintains a Q-table: Q[state][action] = expected future reward
@@ -12,8 +12,8 @@
 #   Q(s,a) ← Q(s,a) + α * [r + γ * max_a' Q(s',a') - Q(s,a)]
 #
 #   Where:
-#     α (alpha)  = learning rate  — how fast to update
-#     γ (gamma)  = discount factor — how much future rewards matter
+#     α (alpha)  = learning rate  - how fast to update
+#     γ (gamma)  = discount factor - how much future rewards matter
 #     r          = immediate reward
 #     s'         = next state
 # =============================================================================
@@ -36,7 +36,7 @@ class QLearningAgent(BaseAgent):
     """
     Tabular Q-Learning agent with epsilon-greedy exploration.
 
-    State is a tuple of discrete bin indices — the Q-table is a dict
+    State is a tuple of discrete bin indices - the Q-table is a dict
     mapping state tuples to numpy arrays of Q-values per action.
     Using defaultdict means new states are initialized to 0 automatically.
 
@@ -108,7 +108,7 @@ class QLearningAgent(BaseAgent):
         """Record episode reward, decay epsilon, reset counter."""
         self.episode_rewards.append(self._current_episode_reward)
         self._current_episode_reward = 0.0
-        # Decay once per episode — ensures enough exploration before settling
+        # Decay once per episode - ensures enough exploration before settling
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
     # ------------------------------------------------------------------

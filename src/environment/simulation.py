@@ -35,7 +35,7 @@ class Simulation:
     Month 2 changes:
     - network_quality now changes every N tasks within an episode
       (simulates device moving through areas of varying signal strength)
-    - velocity added as a simulation parameter — higher velocity = more
+    - velocity added as a simulation parameter - higher velocity = more
       volatile quality changes (vehicle vs pedestrian vs stationary)
     - State now includes velocity_bin and quality_trend_bin
     - use_mobility=False gives Month 1 behaviour for backward compatibility
@@ -49,6 +49,8 @@ class Simulation:
         network_quality: Optional[float] = None,
         velocity: float = 0.0,
         use_mobility: bool = False,
+        w_latency: float = W_LATENCY,
+        w_energy: float = W_ENERGY,
     ):
         self.agent        = agent
         self.seed         = seed
@@ -56,6 +58,10 @@ class Simulation:
         self._fixed_quality = network_quality
         self.velocity     = velocity          # 0.0=stationary, 1.0=fast vehicle
         self.use_mobility = use_mobility
+        # Reward weights - overridable so the Pareto sweep can vary the
+        # latency/energy preference without editing config.py.
+        self.w_latency    = w_latency
+        self.w_energy     = w_energy
 
         self.completed_tasks: List[Task] = []
         self._episode_reward = 0.0
@@ -122,16 +128,17 @@ class Simulation:
             yield env.timeout(latency)
         elif action == ACTION_EDGE:
             queue_wait = yield env.process(edge.process(task))
-            latency, energy = edge_cost(task.size_bits, task.complexity, queue_wait)
+            latency, energy = edge_cost(task.size_bits, task.complexity,
+                                        sc["quality"], queue_wait)
         else:
             yield env.process(cloud.process(task))
-            latency, energy = cloud_cost(task.size_bits, task.complexity)
+            latency, energy = cloud_cost(task.size_bits, task.complexity, sc["quality"])
 
         task.latency     = latency
         task.energy      = energy
         task.finish_time = env.now
 
-        reward = -(W_LATENCY * latency + W_ENERGY * energy)
+        reward = -(self.w_latency * latency + self.w_energy * energy)
         self._episode_reward += reward
 
         if self.agent and hasattr(self.agent, 'learn'):

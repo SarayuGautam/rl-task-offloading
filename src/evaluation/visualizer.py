@@ -1,5 +1,5 @@
 # =============================================================================
-# evaluation/visualizer.py — Charts for Module 6C
+# evaluation/visualizer.py - Charts for Module 6C
 # =============================================================================
 import numpy as np
 import matplotlib

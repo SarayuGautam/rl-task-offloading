@@ -1,5 +1,5 @@
 # =============================================================================
-# evaluation/metrics.py — Performance metrics for Module 6B
+# evaluation/metrics.py - Performance metrics for Module 6B
 # =============================================================================
 import numpy as np
 from typing import List

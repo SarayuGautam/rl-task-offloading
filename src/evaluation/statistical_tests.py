@@ -1,7 +1,7 @@
 # =============================================================================
 # evaluation/statistical_tests.py
 #
-# Month 2 — Statistical validation.
+# Month 2 - Statistical validation.
 # Run Q-Learning across multiple seeds and compute 95% confidence intervals.
 # This proves the 11.9% improvement is statistically significant, not a fluke.
 # =============================================================================
@@ -48,11 +48,16 @@ def confidence_interval(values: list) -> tuple:
 def run_all(verbose: bool = True) -> dict:
     """
     Run full statistical validation across all SEEDS.
+
+    Improvement is measured against the BEST fixed baseline per seed (the
+    lowest-composite-cost of Always Edge / Always Cloud), so the headline
+    number is honest rather than measured against a weaker baseline.
+
     Returns dict with mean, CI, and improvement stats.
     """
-    ql_costs, edge_costs = [], []
+    ql_costs, base_costs, base_names = [], [], []
 
-    print(f"Running {len(SEEDS)} seeds — this takes a few minutes...\n")
+    print(f"Running {len(SEEDS)} seeds - this takes a few minutes...\n")
 
     for i, seed in enumerate(SEEDS):
         print(f"  Seed {seed} ({i+1}/{len(SEEDS)}): training...", end=" ", flush=True)
@@ -64,48 +69,56 @@ def run_all(verbose: bool = True) -> dict:
         ql_cost = composite_cost(tasks)
         ql_costs.append(ql_cost)
 
-        # Best baseline (Always Edge) for same seed
-        edge_cost_val = run_baseline(AlwaysEdgeAgent(), seed)
-        edge_costs.append(edge_cost_val)
+        # Best fixed baseline for the same seed (lowest composite cost)
+        candidates = {
+            "Always Edge":  run_baseline(AlwaysEdgeAgent(),  seed),
+            "Always Cloud": run_baseline(AlwaysCloudAgent(), seed),
+        }
+        best_name = min(candidates, key=candidates.get)
+        best_cost = candidates[best_name]
+        base_costs.append(best_cost)
+        base_names.append(best_name)
 
-        imp = (edge_cost_val - ql_cost) / edge_cost_val * 100
-        print(f"QL={ql_cost:.5f}  Edge={edge_cost_val:.5f}  improvement={imp:+.1f}%")
+        imp = (best_cost - ql_cost) / best_cost * 100
+        print(f"QL={ql_cost:.5f}  best={best_name}({best_cost:.5f})  improvement={imp:+.1f}%")
 
     # Compute CIs
     ql_mean, ql_ci     = confidence_interval(ql_costs)
-    edge_mean, edge_ci = confidence_interval(edge_costs)
+    base_mean, base_ci = confidence_interval(base_costs)
 
-    improvements = [(e - q) / e * 100 for q, e in zip(ql_costs, edge_costs)]
+    improvements = [(b - q) / b * 100 for q, b in zip(ql_costs, base_costs)]
     imp_mean, imp_ci   = confidence_interval(improvements)
 
     results = {
         "seeds":         SEEDS,
         "ql_costs":      ql_costs,
-        "edge_costs":    edge_costs,
+        "base_costs":    base_costs,
+        "base_names":    base_names,
         "improvements":  improvements,
         "ql_mean":       ql_mean,
         "ql_ci":         ql_ci,
-        "edge_mean":     edge_mean,
-        "edge_ci":       edge_ci,
+        "base_mean":     base_mean,
+        "base_ci":       base_ci,
         "imp_mean":      imp_mean,
         "imp_ci":        imp_ci,
         "significant":   (imp_mean - imp_ci) > 0,  # CI lower bound > 0 = significant
     }
 
     if verbose:
+        best_label = max(set(base_names), key=base_names.count)
         print()
         print("=" * 55)
         print("  STATISTICAL VALIDATION RESULTS")
         print("=" * 55)
-        print(f"  Q-Learning composite cost:  {ql_mean:.5f} ± {ql_ci:.5f}")
-        print(f"  Always Edge composite cost: {edge_mean:.5f} ± {edge_ci:.5f}")
-        print(f"  Improvement:                {imp_mean:+.2f}% ± {imp_ci:.2f}%")
-        print(f"  95% CI lower bound:         {imp_mean - imp_ci:+.2f}%")
+        print(f"  Q-Learning composite cost:    {ql_mean:.5f} ± {ql_ci:.5f}")
+        print(f"  Best baseline ({best_label}): {base_mean:.5f} ± {base_ci:.5f}")
+        print(f"  Improvement vs best baseline: {imp_mean:+.2f}% ± {imp_ci:.2f}%")
+        print(f"  95% CI lower bound:           {imp_mean - imp_ci:+.2f}%")
         print()
         if results["significant"]:
-            print("  ✅ STATISTICALLY SIGNIFICANT — CI lower bound > 0")
+            print("  [PASS] STATISTICALLY SIGNIFICANT - CI lower bound > 0")
         else:
-            print("  ❌ Not significant — CI includes 0, need more seeds")
+            print("  [FAIL] Not significant - CI includes 0, need more seeds")
         print("=" * 55)
 
     return results

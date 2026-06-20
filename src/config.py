@@ -1,5 +1,5 @@
 # =============================================================================
-# config.py — All hyperparameters in one place
+# config.py - All hyperparameters in one place
 # Month 2: Added VELOCITY_BINS and QUALITY_TREND_BINS for mobility extension
 # =============================================================================
 
@@ -18,16 +18,24 @@ DEVICE_POWER     = 0.5
 
 # Edge (Tier 2)
 EDGE_CPU_SPEED         = 8_000
-EDGE_BANDWIDTH         = 20e6
 EDGE_PROPAGATION_DELAY = 0.005
 EDGE_QUEUE_CAPACITY    = 10
 
 # Cloud (Tier 3)
 CLOUD_CPU_SPEED         = 30_000
-CLOUD_BANDWIDTH         = 20e6
 CLOUD_PROPAGATION_DELAY = 0.08
 
 TRANSMISSION_POWER = 0.3
+
+# ── Wireless channel - Shannon-Hartley model ──────────────────────────────
+# Achievable uplink data rate depends on signal quality:
+#   rate = B * log2(1 + SNR)        (Shannon-Hartley theorem)
+# SNR is derived from network_quality (0.1 = poor signal .. 1.0 = great).
+# This makes the network_quality state variable actually affect cost:
+#   poor signal -> low rate -> high transmission delay & energy.
+CHANNEL_BANDWIDTH_HZ = 1e6     # 1 MHz uplink bandwidth (B)
+SNR_DB_MIN           = -10.0   # quality=0.1 -> ~137 kbps  (very poor signal)
+SNR_DB_MAX           = 30.0    # quality=1.0 -> ~10 Mbps   (excellent signal)
 
 # Q-Learning
 LEARNING_RATE   = 0.15
