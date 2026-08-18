@@ -15,3 +15,6 @@ venv/
 experiments/results/*.csv
 experiments/results/charts/
 experiments/**/*.npz
+
+# Pre-fix result snapshots (kept locally, not versioned)
+experiments/results_BACKUP_*/

@@ -44,34 +44,73 @@ def comparison_bar(results: dict, metric: str, save_path: str):
     print(f"Saved: {save_path}")
 
 
-def qtable_heatmap(q_table: dict, save_path: str):
-    """Heatmap of greedy actions across state dimensions."""
+def qtable_heatmap(q_table: dict, save_path: str, visit_counts: dict = None,
+                   min_visits: int = 30):
+    """
+    Heatmap of greedy actions across state dimensions.
+
+    Two corrections matter here, and both change what the figure claims:
+
+    1. The greedy action is taken over actions that were ACTUALLY TRIED in a
+       state. All rewards are negative, so an untried action still sitting at
+       its zero initialisation would otherwise win the arg-max and be drawn as
+       though it were a learned decision - which previously made every
+       unexplored cell render as "Local".
+    2. States that were never visited, or visited too few times for their
+       values to mean anything, are drawn in grey rather than being given a
+       colour. An unvisited state has no learned policy and the figure must not
+       imply otherwise.
+    """
     import matplotlib.patches as mpatches
     action_names  = ['Local', 'Edge', 'Cloud']
     action_colors = ['#f0a500', '#2196F3', '#4caf50']
+    UNTRAINED = '#d9d9d9'
+    cmap = matplotlib.colors.ListedColormap([UNTRAINED] + action_colors)
+
     fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
     queue_levels = [0, 1, 2, 3]; size_levels = [0, 1, 2]; net_levels = [0, 1, 2]
+
     for ax_idx, net_bin in enumerate(net_levels):
-        grid = np.full((len(size_levels), len(queue_levels)), -1)
+        # 0 = untrained; 1..3 = Local/Edge/Cloud
+        grid = np.zeros((len(size_levels), len(queue_levels)), dtype=int)
+        labels = [['' for _ in queue_levels] for _ in size_levels]
         for qi, q in enumerate(queue_levels):
             for si, s in enumerate(size_levels):
                 st = (q, s, net_bin)
-                if st in q_table:
-                    grid[si, qi] = int(np.argmax(q_table[st]))
-        im = axes[ax_idx].imshow(grid, cmap=matplotlib.colors.ListedColormap(action_colors),
-                                  vmin=0, vmax=2, aspect='auto')
+                if st not in q_table:
+                    continue
+                vals = np.asarray(q_table[st])
+                if visit_counts is not None and st in visit_counts:
+                    vis   = np.asarray(visit_counts[st])
+                    tried = vis >= max(1, min_visits)
+                    if not tried.any():
+                        tried = vis > 0            # visited, but sparsely
+                        if not tried.any():
+                            continue
+                        labels[si][qi] = '?'       # too few samples to trust
+                else:
+                    tried = np.ones_like(vals, dtype=bool)
+                a = int(np.argmax(np.where(tried, vals, -np.inf)))
+                grid[si, qi] = a + 1
+                labels[si][qi] = action_names[a][0] + labels[si][qi]
+
+        axes[ax_idx].imshow(grid, cmap=cmap, vmin=0, vmax=3, aspect='auto')
         axes[ax_idx].set_xticks(range(4)); axes[ax_idx].set_xticklabels(['empty','1-2','3-5','6+'])
         axes[ax_idx].set_yticks(range(3)); axes[ax_idx].set_yticklabels(['small','med','large'])
         axes[ax_idx].set_xlabel('Edge queue'); axes[ax_idx].set_ylabel('Task size')
         axes[ax_idx].set_title(f'Net quality: {["poor","ok","good"][net_bin]}')
         for qi in range(4):
             for si in range(3):
-                if grid[si, qi] >= 0:
-                    axes[ax_idx].text(qi, si, action_names[grid[si, qi]][0],
-                                      ha='center', va='center', fontsize=10, color='white', fontweight='bold')
+                txt = labels[si][qi] if grid[si, qi] > 0 else '--'
+                col = 'white' if grid[si, qi] > 0 else '#777777'
+                axes[ax_idx].text(qi, si, txt, ha='center', va='center',
+                                  fontsize=10, color=col, fontweight='bold')
+
     patches = [mpatches.Patch(color=c, label=n) for c, n in zip(action_colors, action_names)]
-    fig.legend(handles=patches, loc='upper right', fontsize=9)
-    fig.suptitle('Learned policy: greedy action per state (L=Local, E=Edge, C=Cloud)')
+    patches.append(mpatches.Patch(color=UNTRAINED, label='untrained'))
+    fig.legend(handles=patches, loc='upper right', fontsize=8)
+    fig.suptitle('Learned policy: greedy action per state '
+                 '(L=Local, E=Edge, C=Cloud; "--" never visited, "?" <30 visits)')
     fig.tight_layout()
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     fig.savefig(save_path, dpi=150); plt.close(fig)

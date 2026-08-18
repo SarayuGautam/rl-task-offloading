@@ -16,7 +16,9 @@ class CloudServer:
     Simulates a remote cloud data center.
 
     No resource contention - unlimited parallel capacity.
-    The cost is purely the propagation delay (100ms+).
+    The cost is purely the propagation delay (CLOUD_PROPAGATION_DELAY = 80 ms),
+    which is added analytically in network_model.cloud_cost rather than
+    advanced here in simulation time.
     """
 
     def __init__(self, env: simpy.Environment):

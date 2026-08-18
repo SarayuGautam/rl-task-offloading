@@ -3,7 +3,7 @@
 #
 # Month 2 - Statistical validation.
 # Run Q-Learning across multiple seeds and compute 95% confidence intervals.
-# This proves the 11.9% improvement is statistically significant, not a fluke.
+# Reports whether the measured improvement is statistically significant.
 # =============================================================================
 
 import numpy as np
@@ -15,10 +15,17 @@ from src.environment.simulation import Simulation
 from src.agent.q_learning_agent import QLearningAgent
 from src.agent.baselines import AlwaysLocalAgent, AlwaysEdgeAgent, AlwaysCloudAgent, RandomAgent
 from src.evaluation.metrics import composite_cost, summary
+from src.config import EVAL_NETWORK_QUALITY
 
 SEEDS = [42, 123, 456, 789, 999]
 TRAIN_EPISODES = 2_000
 EVAL_DURATION  = 1_000
+
+# Training episode ep uses seed (seed + ep), i.e. the range [seed, seed+1999].
+# Evaluating on `seed` itself would therefore re-use a training seed. Offsetting
+# the evaluation seed by more than TRAIN_EPISODES guarantees the evaluation
+# workload is disjoint from every episode the agent trained on.
+EVAL_SEED_OFFSET = 100_000
 
 
 def train_agent(seed: int) -> QLearningAgent:
@@ -32,8 +39,14 @@ def train_agent(seed: int) -> QLearningAgent:
     return agent
 
 
+def eval_seed(seed: int) -> int:
+    """Evaluation seed, held disjoint from the training seed range."""
+    return seed + EVAL_SEED_OFFSET
+
+
 def run_baseline(agent, seed: int) -> float:
-    sim = Simulation(agent=agent, seed=seed, network_quality=0.9)
+    sim = Simulation(agent=agent, seed=eval_seed(seed),
+                     network_quality=EVAL_NETWORK_QUALITY)
     tasks = sim.run(duration=EVAL_DURATION)
     return composite_cost(tasks)
 
@@ -129,7 +142,8 @@ def run_all(verbose: bool = True) -> dict:
 
         # Train Q-Learning
         agent = train_agent(seed)
-        sim = Simulation(agent=agent, seed=seed, network_quality=0.9)
+        sim = Simulation(agent=agent, seed=eval_seed(seed),
+                         network_quality=EVAL_NETWORK_QUALITY)
         tasks = sim.run(duration=EVAL_DURATION)
         ql_cost = composite_cost(tasks)
         ql_costs.append(ql_cost)

@@ -21,6 +21,7 @@ from src.config import (
     W_LATENCY, W_ENERGY,
     QUEUE_BINS, TASK_SIZE_BINS, NETWORK_QUALITY_BINS,
     VELOCITY_BINS, QUALITY_TREND_BINS,
+    QUALITY_TRAIN_MIN, QUALITY_TRAIN_MAX,
 )
 from src.environment.task_generator import Task
 from src.environment.edge_server import EdgeServer
@@ -75,7 +76,11 @@ class Simulation:
         if self._fixed_quality is not None:
             net_quality = self._fixed_quality
         else:
-            net_quality = float(rng.uniform(0.5, 1.0))
+            # Sample the FULL quality range so that every network-quality bin,
+            # including the poor-signal bin (quality < 0.4), is reachable during
+            # training. See the note in config.py: the previous range (0.5, 1.0)
+            # left half the state space unvisited.
+            net_quality = float(rng.uniform(QUALITY_TRAIN_MIN, QUALITY_TRAIN_MAX))
 
         env   = simpy.Environment()
         edge  = EdgeServer(env)

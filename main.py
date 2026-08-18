@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from src.environment.simulation import Simulation
 from src.agent.q_learning_agent import QLearningAgent
 from src.agent.baselines import AlwaysLocalAgent, AlwaysEdgeAgent, AlwaysCloudAgent, RandomAgent
-from src.config import NUM_EPISODES, SIM_DURATION, RANDOM_SEED
+from src.config import NUM_EPISODES, SIM_DURATION, RANDOM_SEED, EVAL_NETWORK_QUALITY
 
 
 def get_agent(name: str):
@@ -43,6 +43,7 @@ def run_baseline(agent_name: str, log_dir: str):
         agent=agent,
         seed=RANDOM_SEED,
         log_path=os.path.join(log_dir, f"{agent_name}.csv"),
+        network_quality=EVAL_NETWORK_QUALITY,   # fixed, documented eval channel
     )
     tasks = sim.run(duration=SIM_DURATION)
     avg_latency = sum(t.latency for t in tasks) / len(tasks)
@@ -79,6 +80,17 @@ def run_qlearning(episodes: int, log_dir: str,
     qtable_path = os.path.join(log_dir, "qtables", "qlearning_trained.npz")
     agent.save(qtable_path)
 
+    # Training coverage - reported so that any claim about what the policy
+    # "learned" in a given state can be checked against whether that state was
+    # ever actually visited.
+    expected = 324 if mobility else 36
+    cov = agent.coverage(expected_states=expected)
+    print(f"\n[coverage] states visited {cov['states_visited']}/{expected} "
+          f"({cov['state_coverage_pct']}%)  |  state-actions visited "
+          f"{cov['state_actions_visited']}/{cov['state_actions_total']}  |  "
+          f"fully-explored states {cov['fully_explored_states']}  |  "
+          f"learning steps {cov['total_steps']:,}")
+
     # Final evaluation run (no exploration)
     agent.epsilon = 0.0
     sim = Simulation(
@@ -87,6 +99,7 @@ def run_qlearning(episodes: int, log_dir: str,
         log_path=os.path.join(log_dir, "qlearning_eval.csv"),
         velocity=velocity,
         use_mobility=mobility,
+        network_quality=None if mobility else EVAL_NETWORK_QUALITY,
     )
     tasks = sim.run(duration=SIM_DURATION)
     avg_latency = sum(t.latency for t in tasks) / len(tasks)
@@ -116,12 +129,14 @@ def generate_charts(agent: QLearningAgent, log_dir: str):
                      ("Always Cloud", AlwaysCloudAgent()),
                      ("Random", RandomAgent()),
                      ("Q-Learning", agent)]:
-        tasks = Simulation(agent=a, seed=RANDOM_SEED).run(duration=SIM_DURATION)
+        tasks = Simulation(agent=a, seed=RANDOM_SEED,
+                           network_quality=EVAL_NETWORK_QUALITY).run(duration=SIM_DURATION)
         results[label] = summary(tasks, label)
     comparison_bar(results, "avg_latency", os.path.join(chart_dir, "comparison_latency.png"))
 
     # 3. Q-table heatmap (static 3-D state only)
-    qtable_heatmap(dict(agent.q_table), os.path.join(chart_dir, "qtable_heatmap.png"))
+    qtable_heatmap(dict(agent.q_table), os.path.join(chart_dir, "qtable_heatmap.png"),
+                   visit_counts=dict(agent.visit_counts))
 
 
 def run_stats():

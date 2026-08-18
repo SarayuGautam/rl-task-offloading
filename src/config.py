@@ -19,7 +19,9 @@ DEVICE_POWER     = 0.5
 # Edge (Tier 2)
 EDGE_CPU_SPEED         = 8_000
 EDGE_PROPAGATION_DELAY = 0.005
-EDGE_QUEUE_CAPACITY    = 10
+# NOTE: never enforced - simpy.Resource queues are unbounded. Kept only as a
+# documented design intent; see edge_server.py. Not referenced by any code.
+# EDGE_QUEUE_CAPACITY  = 10
 
 # Cloud (Tier 3)
 CLOUD_CPU_SPEED         = 30_000
@@ -36,6 +38,25 @@ TRANSMISSION_POWER = 0.3
 CHANNEL_BANDWIDTH_HZ = 1e6     # 1 MHz uplink bandwidth (B)
 SNR_DB_MIN           = -10.0   # quality=0.1 -> ~137 kbps  (very poor signal)
 SNR_DB_MAX           = 30.0    # quality=1.0 -> ~10 Mbps   (excellent signal)
+
+# ── Network-quality sampling range for TRAINING episodes ──────────────────
+# Each training episode draws one network quality from U(MIN, MAX).
+#
+# NOTE (fix, Aug 2026): this range was previously (0.5, 1.0), which never
+# produced a quality below the first NETWORK_QUALITY_BINS boundary (0.4).
+# The whole net_bin=0 ("poor signal") slice of the state space was therefore
+# NEVER VISITED during training - the agent stored only 18 of 36 states, and
+# any greedy query against an unvisited state returned argmax([0,0,0]) = Local.
+# That produced a spurious "the agent falls back to local under poor signal"
+# reading of the Q-table which was an artefact of zero-initialisation, not
+# learned behaviour. Sampling the full range fixes the coverage gap.
+QUALITY_TRAIN_MIN = 0.1
+QUALITY_TRAIN_MAX = 1.0
+
+# Fixed network quality used for ALL greedy evaluation runs, so that the
+# headline comparison, the 5-seed statistics and the Pareto sweep are all
+# measured under identical, documented channel conditions.
+EVAL_NETWORK_QUALITY = 0.9
 
 # Q-Learning
 LEARNING_RATE   = 0.15

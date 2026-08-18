@@ -6,17 +6,27 @@
 # =============================================================================
 
 import simpy
-from src.config import EDGE_QUEUE_CAPACITY, EDGE_CPU_SPEED
+from src.config import EDGE_CPU_SPEED
 from src.environment.network_model import compute_time
 
 
 class EdgeServer:
     """
-    Simulates a nearby MEC server with limited capacity.
+    Simulates a nearby MEC server: ONE server, FIFO, UNBOUNDED queue.
 
     Uses simpy.Resource so tasks automatically queue when the server
     is busy - this creates realistic queue_wait times that the RL agent
     must learn to avoid.
+
+    NOTE (fix, Aug 2026): `capacity=1` is the number of SERVERS, not a queue
+    bound - simpy.Resource queues are unbounded. This class previously
+    imported EDGE_QUEUE_CAPACITY (=10) without ever using it, and the project
+    report described the edge as having "a finite FIFO queue (capacity 10)".
+    That was never implemented: no task is ever rejected. The import has been
+    removed and the report corrected to say the queue is unbounded. The system
+    is stable at the rates studied (lambda = 6/s against mu ~ 14.5/s,
+    rho ~ 0.41), so an unbounded queue is not a modelling problem - but it must
+    be described accurately.
 
     Attributes:
         resource     : SimPy Resource (capacity=1 means one task at a time)
