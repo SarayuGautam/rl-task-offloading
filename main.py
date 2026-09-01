@@ -21,6 +21,7 @@ from src.environment.simulation import Simulation
 from src.agent.q_learning_agent import QLearningAgent
 from src.agent.baselines import AlwaysLocalAgent, AlwaysEdgeAgent, AlwaysCloudAgent, RandomAgent
 from src.config import NUM_EPISODES, SIM_DURATION, RANDOM_SEED, EVAL_NETWORK_QUALITY
+from src.evaluation.statistical_tests import EVAL_SEED_OFFSET
 
 
 def get_agent(name: str):
@@ -92,10 +93,12 @@ def run_qlearning(episodes: int, log_dir: str,
           f"learning steps {cov['total_steps']:,}")
 
     # Final evaluation run (no exploration)
+    # Use EVAL_SEED_OFFSET to ensure evaluation workload is disjoint from training
+    eval_seed = RANDOM_SEED + EVAL_SEED_OFFSET
     agent.epsilon = 0.0
     sim = Simulation(
         agent=agent,
-        seed=RANDOM_SEED,
+        seed=eval_seed,
         log_path=os.path.join(log_dir, "qlearning_eval.csv"),
         velocity=velocity,
         use_mobility=mobility,
@@ -116,8 +119,10 @@ def generate_charts(agent: QLearningAgent, log_dir: str):
     """Save the 3 thesis charts: learning curve, comparison bar, Q-table heatmap."""
     from src.evaluation.visualizer import learning_curve, comparison_bar, qtable_heatmap
     from src.evaluation.metrics import summary
+    from src.evaluation.statistical_tests import EVAL_SEED_OFFSET
 
     chart_dir = os.path.join(log_dir, "charts")
+    eval_seed = RANDOM_SEED + EVAL_SEED_OFFSET
 
     # 1. Learning curve from this agent's training history
     learning_curve(agent.episode_rewards, os.path.join(chart_dir, "learning_curve.png"))
@@ -129,7 +134,7 @@ def generate_charts(agent: QLearningAgent, log_dir: str):
                      ("Always Cloud", AlwaysCloudAgent()),
                      ("Random", RandomAgent()),
                      ("Q-Learning", agent)]:
-        tasks = Simulation(agent=a, seed=RANDOM_SEED,
+        tasks = Simulation(agent=a, seed=eval_seed,
                            network_quality=EVAL_NETWORK_QUALITY).run(duration=SIM_DURATION)
         results[label] = summary(tasks, label)
     comparison_bar(results, "avg_latency", os.path.join(chart_dir, "comparison_latency.png"))
