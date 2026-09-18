@@ -1,0 +1,424 @@
+diff --git a/.gitignore b/.gitignore
+index e15d40f..0e0f1a2 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -18,3 +18,4 @@ experiments/**/*.npz
+ 
+ # Pre-fix result snapshots (kept locally, not versioned)
+ experiments/results_BACKUP_*/
++pyvenv.cfg
+diff --git a/main.py b/main.py
+index bef0231..c708e70 100644
+--- a/main.py
++++ b/main.py
+@@ -6,6 +6,7 @@
+ #   python main.py --agent qlearning --charts         # train + save 3 charts
+ #   python main.py --agent qlearning --mobility --velocity 0.8   # mobility mode
+ #   python main.py --agent random                     # one baseline
++#   python main.py --agent heuristic                  # greedy cost heuristic
+ #   python main.py --agent all                        # all baselines + Q-Learning
+ #   python main.py --agent stats                      # 5-seed statistical validation
+ #   python main.py --agent validate                   # M/M/1 simulation validity check
+@@ -19,9 +20,11 @@ sys.path.insert(0, os.path.dirname(__file__))
+ 
+ from src.environment.simulation import Simulation
+ from src.agent.q_learning_agent import QLearningAgent
+-from src.agent.baselines import AlwaysLocalAgent, AlwaysEdgeAgent, AlwaysCloudAgent, RandomAgent
+-from src.config import NUM_EPISODES, SIM_DURATION, RANDOM_SEED, EVAL_NETWORK_QUALITY
+-from src.evaluation.statistical_tests import EVAL_SEED_OFFSET
++from src.agent.baselines import (AlwaysLocalAgent, AlwaysEdgeAgent,
++                                 AlwaysCloudAgent, RandomAgent,
++                                 GreedyHeuristicAgent)
++from src.config import (NUM_EPISODES, SIM_DURATION, RANDOM_SEED,
++                        EVAL_NETWORK_QUALITY, train_sim_seed, eval_sim_seed)
+ 
+ 
+ def get_agent(name: str):
+@@ -31,6 +34,7 @@ def get_agent(name: str):
+         "edge":         AlwaysEdgeAgent,
+         "cloud":        AlwaysCloudAgent,
+         "random":       RandomAgent,
++        "heuristic":    GreedyHeuristicAgent,
+     }
+     if name not in agents:
+         print(f"Unknown agent '{name}'. Choose from: {list(agents.keys())}")
+@@ -38,13 +42,28 @@ def get_agent(name: str):
+     return agents[name]()
+ 
+ 
+-def run_baseline(agent_name: str, log_dir: str):
++def run_baseline(agent_name: str, log_dir: str,
++                 mobility: bool = False, velocity: float = 0.0):
++    """
++    Evaluate one fixed strategy.
++
++    NOTE (fix, Sep 2026): this used seed=RANDOM_SEED while run_qlearning()
++    evaluated at eval_sim_seed(RANDOM_SEED). `--agent all` therefore compared
++    the baselines and the agent on DIFFERENT workloads (60,056 vs 60,252
++    tasks). Both now use the same evaluation seed, so the comparison is paired.
++
++    The mobility flags were also missing here, which made it impossible to run
++    any baseline under within-episode channel variation - the reason no
++    mobility comparison could be reported.
++    """
+     agent = get_agent(agent_name)
+     sim = Simulation(
+         agent=agent,
+-        seed=RANDOM_SEED,
++        seed=eval_sim_seed(RANDOM_SEED),
+         log_path=os.path.join(log_dir, f"{agent_name}.csv"),
+-        network_quality=EVAL_NETWORK_QUALITY,   # fixed, documented eval channel
++        network_quality=None if mobility else EVAL_NETWORK_QUALITY,
++        velocity=velocity,
++        use_mobility=mobility,
+     )
+     tasks = sim.run(duration=SIM_DURATION)
+     avg_latency = sum(t.latency for t in tasks) / len(tasks)
+@@ -64,7 +83,7 @@ def run_qlearning(episodes: int, log_dir: str,
+     for ep in range(episodes):
+         sim = Simulation(
+             agent=agent,
+-            seed=RANDOM_SEED + ep,   # different seed each episode
++            seed=train_sim_seed(RANDOM_SEED, ep),   # disjoint per-run range
+             log_path=None,
+             velocity=velocity,
+             use_mobility=mobility,
+@@ -92,9 +111,8 @@ def run_qlearning(episodes: int, log_dir: str,
+           f"fully-explored states {cov['fully_explored_states']}  |  "
+           f"learning steps {cov['total_steps']:,}")
+ 
+-    # Final evaluation run (no exploration)
+-    # Use EVAL_SEED_OFFSET to ensure evaluation workload is disjoint from training
+-    eval_seed = RANDOM_SEED + EVAL_SEED_OFFSET
++    # Final evaluation run (no exploration), on a workload disjoint from training
++    eval_seed = eval_sim_seed(RANDOM_SEED)
+     agent.epsilon = 0.0
+     sim = Simulation(
+         agent=agent,
+@@ -119,10 +137,9 @@ def generate_charts(agent: QLearningAgent, log_dir: str):
+     """Save the 3 thesis charts: learning curve, comparison bar, Q-table heatmap."""
+     from src.evaluation.visualizer import learning_curve, comparison_bar, qtable_heatmap
+     from src.evaluation.metrics import summary
+-    from src.evaluation.statistical_tests import EVAL_SEED_OFFSET
+ 
+     chart_dir = os.path.join(log_dir, "charts")
+-    eval_seed = RANDOM_SEED + EVAL_SEED_OFFSET
++    eval_seed = eval_sim_seed(RANDOM_SEED)
+ 
+     # 1. Learning curve from this agent's training history
+     learning_curve(agent.episode_rewards, os.path.join(chart_dir, "learning_curve.png"))
+@@ -133,6 +150,7 @@ def generate_charts(agent: QLearningAgent, log_dir: str):
+                      ("Always Edge", AlwaysEdgeAgent()),
+                      ("Always Cloud", AlwaysCloudAgent()),
+                      ("Random", RandomAgent()),
++                     ("Greedy Heuristic", GreedyHeuristicAgent()),
+                      ("Q-Learning", agent)]:
+         tasks = Simulation(agent=a, seed=eval_seed,
+                            network_quality=EVAL_NETWORK_QUALITY).run(duration=SIM_DURATION)
+@@ -165,7 +183,8 @@ def run_pareto():
+ def main():
+     parser = argparse.ArgumentParser(description="RL Task Offloading Experiment Runner")
+     parser.add_argument("--agent",    type=str, default="qlearning",
+-                        help="qlearning | local | edge | cloud | random | all | stats | validate | pareto")
++                        help="qlearning | local | edge | cloud | random | heuristic "
++                             "| all | stats | validate | pareto")
+     parser.add_argument("--episodes", type=int, default=NUM_EPISODES,
+                         help="Training episodes (Q-Learning only)")
+     parser.add_argument("--log_dir",  type=str, default="experiments/results",
+@@ -189,8 +208,9 @@ def main():
+         run_stats()
+     elif args.agent == "all":
+         print("=== Running all baselines ===")
+-        for name in ["local", "edge", "cloud", "random"]:
+-            run_baseline(name, args.log_dir)
++        for name in ["local", "edge", "cloud", "random", "heuristic"]:
++            run_baseline(name, args.log_dir,
++                         mobility=args.mobility, velocity=args.velocity)
+         print("\n=== Training Q-Learning ===")
+         run_qlearning(args.episodes, args.log_dir,
+                       mobility=args.mobility, velocity=args.velocity, charts=args.charts)
+@@ -198,7 +218,8 @@ def main():
+         run_qlearning(args.episodes, args.log_dir,
+                       mobility=args.mobility, velocity=args.velocity, charts=args.charts)
+     else:
+-        run_baseline(args.agent, args.log_dir)
++        run_baseline(args.agent, args.log_dir,
++                     mobility=args.mobility, velocity=args.velocity)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/requirements.txt b/requirements.txt
+index 771f2dd..17a9269 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,5 +1,6 @@
+ simpy==4.1.1
+ numpy==1.26.4
++scipy==1.13.1
+ matplotlib==3.8.4
+ torch==2.11.0
+ pandas==2.2.2
+diff --git a/src/agent/baselines.py b/src/agent/baselines.py
+index 71913c8..131268b 100644
+--- a/src/agent/baselines.py
++++ b/src/agent/baselines.py
+@@ -1,14 +1,29 @@
+ # =============================================================================
+ # agent/baselines.py
+ #
+-# Four naive baseline strategies.
+-# Used to prove Q-Learning actually learned something useful.
++# Five baseline strategies: four naive fixed policies plus one informed
++# heuristic. Used to establish how much a learned policy actually adds.
+ # Module 6A in the curriculum.
++#
++# NOTE (added Sep 2026): the four original baselines are all state-blind, so
++# beating them shows only that adapting to state helps at all - not that
++# LEARNING is what delivers the gain. GreedyHeuristicAgent closes that gap: it
++# adapts to exactly the same state the Q-agent sees, but computes its decision
++# from the known cost model instead of learning one. It is the correct
++# reference point for the claim that a learned policy justifies its cost.
+ # =============================================================================
+ 
+ import numpy as np
+ from src.agent.base_agent import BaseAgent
+-from src.config import ACTION_LOCAL, ACTION_EDGE, ACTION_CLOUD
++from src.config import (
++    ACTION_LOCAL, ACTION_EDGE, ACTION_CLOUD,
++    TASK_COMPLEXITY_MIN, TASK_COMPLEXITY_MAX,
++    EDGE_CPU_SPEED, W_LATENCY, W_ENERGY,
++)
++from src.environment.network_model import local_cost, edge_cost, cloud_cost
++
++# Mean edge service time, used to turn a queue count into a wait estimate.
++MEAN_SERVICE_TIME = ((TASK_COMPLEXITY_MIN + TASK_COMPLEXITY_MAX) / 2.0) / EDGE_CPU_SPEED
+ 
+ 
+ class AlwaysLocalAgent(BaseAgent):
+@@ -39,3 +54,44 @@ class RandomAgent(BaseAgent):
+ 
+     def learn(self, *args):
+         pass
++
++
++class GreedyHeuristicAgent(BaseAgent):
++    """
++    Myopic cost-minimising heuristic. State-aware but untrained.
++
++    For each arriving task it evaluates the SAME cost model the reward
++    function uses, once per tier, and takes the cheapest. The edge queue wait
++    is estimated as (tasks in system) x (mean service time) - a rule of thumb,
++    not an oracle: it does not know the arriving task's true service time, nor
++    the remaining service time of the task currently being served.
++
++    This is deliberately the strongest fixed competitor. It costs nothing to
++    run, has no training phase and no memory, and any claim that Q-Learning
++    earns its complexity must be made against this, not against Always-Cloud.
++    """
++
++    def __init__(self, w_latency: float = W_LATENCY, w_energy: float = W_ENERGY):
++        self.w_latency = w_latency
++        self.w_energy = w_energy
++        self._ctx = None
++
++    def set_context(self, task, edge, quality):
++        """Called by Simulation before act(); see simulation._handle_task."""
++        self._ctx = (task, edge, quality)
++
++    def act(self, state):
++        if self._ctx is None:
++            return ACTION_EDGE
++        task, edge, quality = self._ctx
++        est_wait = edge.queue_length * MEAN_SERVICE_TIME
++        options = [
++            local_cost(task.size_bits, task.complexity),
++            edge_cost(task.size_bits, task.complexity, quality, est_wait),
++            cloud_cost(task.size_bits, task.complexity, quality),
++        ]
++        costs = [self.w_latency * lat + self.w_energy * eng for lat, eng in options]
++        return int(np.argmin(costs))
++
++    def learn(self, *args):
++        pass
+diff --git a/src/config.py b/src/config.py
+index adabec4..bd2bc77 100644
+--- a/src/config.py
++++ b/src/config.py
+@@ -7,6 +7,27 @@ RANDOM_SEED = 42
+ SIM_DURATION = 10_000
+ TASK_ARRIVAL_RATE = 6.0
+ 
++# ── Seeding scheme ────────────────────────────────────────────────────────
++# NOTE (fix, Sep 2026): training episode `ep` of run `seed` previously used
++# simulation seed (seed + ep). With SEEDS = [42, 123, 456, 789, 999] and 2,000
++# episodes, run 42 covered sim-seeds 42..2041 and run 123 covered 123..2122 -
++# an overlap of 1,919 of 2,000 episodes (96%). Every pair of "independent"
++# seeds shared between 52% and 96% of its training workload, so the five runs
++# were near-duplicates and the paired t-test's independence assumption did not
++# hold. Striding the seed space keeps the five training ranges disjoint.
++SEED_STRIDE      = 10_000   # > TRAIN_EPISODES, so ranges cannot overlap
++EVAL_SEED_OFFSET = 5_000    # > TRAIN_EPISODES, so eval is disjoint from training
++
++
++def train_sim_seed(seed: int, episode: int) -> int:
++    """Simulation seed for training episode `episode` of run `seed`."""
++    return seed * SEED_STRIDE + episode
++
++
++def eval_sim_seed(seed: int) -> int:
++    """Evaluation seed for run `seed`, disjoint from its training range."""
++    return seed * SEED_STRIDE + EVAL_SEED_OFFSET
++
+ TASK_SIZE_MIN = 1_000
+ TASK_SIZE_MAX = 10_000
+ TASK_COMPLEXITY_MIN = 100
+diff --git a/src/environment/edge_server.py b/src/environment/edge_server.py
+index 5811ecd..f5d3214 100644
+--- a/src/environment/edge_server.py
++++ b/src/environment/edge_server.py
+@@ -40,8 +40,19 @@ class EdgeServer:
+ 
+     @property
+     def queue_length(self) -> int:
+-        """Number of tasks currently waiting (not being processed)."""
+-        return len(self.resource.queue)
++        """
++        Number of tasks in the SYSTEM: waiting plus the one in service.
++
++        NOTE (fix, Sep 2026): this previously returned len(self.resource.queue),
++        which counts only tasks WAITING and excludes the task currently being
++        served. The agent's queue_bin=0 therefore conflated two states that
++        imply very different costs: "server idle" (queue wait ~ 0) and "server
++        busy, nobody waiting" (queue wait ~ one mean service time, ~69 ms). At
++        the load studied (rho ~ 0.41) those cases occur in roughly a 59/41
++        split inside the same bin, and the distinction is exactly what decides
++        edge versus cloud. Counting the in-service task restores it.
++        """
++        return len(self.resource.queue) + self.resource.count
+ 
+     @property
+     def is_busy(self) -> bool:
+diff --git a/src/environment/simulation.py b/src/environment/simulation.py
+index 9ebc110..ee110b3 100644
+--- a/src/environment/simulation.py
++++ b/src/environment/simulation.py
+@@ -125,7 +125,16 @@ class Simulation:
+ 
+     def _handle_task(self, env, task: Task, edge: EdgeServer, cloud: CloudServer, rng, sc):
+         state = self._observe(task, edge, sc)
+-        action = self.agent.act(state) if self.agent else ACTION_EDGE
++        if self.agent is None:
++            action = ACTION_EDGE
++        else:
++            # Agents that reason about raw (undiscretised) quantities rather
++            # than the binned MDP state can opt in via set_context(). The
++            # Q-Learning agent does not implement it and is unaffected: it
++            # still sees only the discrete state tuple.
++            if hasattr(self.agent, "set_context"):
++                self.agent.set_context(task, edge, sc["quality"])
++            action = self.agent.act(state)
+         task.action_taken = action
+ 
+         if action == ACTION_LOCAL:
+diff --git a/src/evaluation/pareto.py b/src/evaluation/pareto.py
+index 41432ba..e9abf12 100644
+--- a/src/evaluation/pareto.py
++++ b/src/evaluation/pareto.py
+@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+ from src.environment.simulation import Simulation
+ from src.agent.q_learning_agent import QLearningAgent
+ from src.evaluation.metrics import avg_latency, avg_energy
+-from src.config import EVAL_NETWORK_QUALITY
++from src.config import EVAL_NETWORK_QUALITY, train_sim_seed, eval_sim_seed
+ 
+ TRAIN_EPISODES = 1_500
+ EVAL_DURATION  = 2_000
+@@ -54,13 +54,13 @@ def train_and_eval(w_latency: float, w_energy: float, seed: int = 42) -> dict:
+     """Train a Q-Learning agent under one weighting, then evaluate it greedily."""
+     agent = QLearningAgent(seed=seed)
+     for ep in range(TRAIN_EPISODES):
+-        sim = Simulation(agent=agent, seed=seed + ep,
++        sim = Simulation(agent=agent, seed=train_sim_seed(seed, ep),
+                          w_latency=w_latency, w_energy=w_energy)
+         sim.run(duration=100)
+         agent.end_episode()
+ 
+     agent.epsilon = 0.0  # greedy evaluation
+-    tasks = Simulation(agent=agent, seed=seed + 100_000,
++    tasks = Simulation(agent=agent, seed=eval_sim_seed(seed),
+                        network_quality=EVAL_NETWORK_QUALITY,
+                        w_latency=w_latency, w_energy=w_energy).run(duration=EVAL_DURATION)
+     return {"w_latency": w_latency, "w_energy": w_energy,
+diff --git a/src/evaluation/statistical_tests.py b/src/evaluation/statistical_tests.py
+index 18d924b..76e3ab7 100644
+--- a/src/evaluation/statistical_tests.py
++++ b/src/evaluation/statistical_tests.py
+@@ -13,26 +13,26 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+ 
+ from src.environment.simulation import Simulation
+ from src.agent.q_learning_agent import QLearningAgent
+-from src.agent.baselines import AlwaysLocalAgent, AlwaysEdgeAgent, AlwaysCloudAgent, RandomAgent
++from src.agent.baselines import (AlwaysLocalAgent, AlwaysEdgeAgent,
++                                 AlwaysCloudAgent, RandomAgent,
++                                 GreedyHeuristicAgent)
+ from src.evaluation.metrics import composite_cost, summary
+-from src.config import EVAL_NETWORK_QUALITY
++from src.config import (EVAL_NETWORK_QUALITY, SEED_STRIDE, EVAL_SEED_OFFSET,
++                        train_sim_seed, eval_sim_seed)
+ 
+ SEEDS = [42, 123, 456, 789, 999]
+ TRAIN_EPISODES = 2_000
+ EVAL_DURATION  = 1_000
+ 
+-# Training episode ep uses seed (seed + ep), i.e. the range [seed, seed+1999].
+-# Evaluating on `seed` itself would therefore re-use a training seed. Offsetting
+-# the evaluation seed by more than TRAIN_EPISODES guarantees the evaluation
+-# workload is disjoint from every episode the agent trained on.
+-EVAL_SEED_OFFSET = 100_000
++assert SEED_STRIDE > TRAIN_EPISODES, "seed stride must exceed episode count"
++assert TRAIN_EPISODES < EVAL_SEED_OFFSET < SEED_STRIDE, "eval seed must be disjoint"
+ 
+ 
+ def train_agent(seed: int) -> QLearningAgent:
+     """Train one Q-Learning agent with a given seed."""
+     agent = QLearningAgent(seed=seed)
+     for ep in range(TRAIN_EPISODES):
+-        sim = Simulation(agent=agent, seed=seed + ep)
++        sim = Simulation(agent=agent, seed=train_sim_seed(seed, ep))
+         sim.run(duration=100)
+         agent.end_episode()
+     agent.epsilon = 0.0   # greedy eval
+@@ -41,7 +41,7 @@ def train_agent(seed: int) -> QLearningAgent:
+ 
+ def eval_seed(seed: int) -> int:
+     """Evaluation seed, held disjoint from the training seed range."""
+-    return seed + EVAL_SEED_OFFSET
++    return eval_sim_seed(seed)
+ 
+ 
+ def run_baseline(agent, seed: int) -> float:
+@@ -128,8 +128,10 @@ def run_all(verbose: bool = True) -> dict:
+     Run full statistical validation across all SEEDS.
+ 
+     Improvement is measured against the BEST fixed baseline per seed (the
+-    lowest-composite-cost of Always Edge / Always Cloud), so the headline
+-    number is honest rather than measured against a weaker baseline.
++    lowest-composite-cost of Always Edge / Always Cloud / Greedy Heuristic),
++    so the headline number is honest rather than measured against a weaker
++    baseline. A NEGATIVE improvement is a real outcome and is reported as
++    such: the greedy heuristic is a strong competitor and may win.
+ 
+     Returns dict with mean, CI, and improvement stats.
+     """
+@@ -150,8 +152,9 @@ def run_all(verbose: bool = True) -> dict:
+ 
+         # Best fixed baseline for the same seed (lowest composite cost)
+         candidates = {
+-            "Always Edge":  run_baseline(AlwaysEdgeAgent(),  seed),
+-            "Always Cloud": run_baseline(AlwaysCloudAgent(), seed),
++            "Always Edge":      run_baseline(AlwaysEdgeAgent(),      seed),
++            "Always Cloud":     run_baseline(AlwaysCloudAgent(),     seed),
++            "Greedy Heuristic": run_baseline(GreedyHeuristicAgent(), seed),
+         }
+         best_name = min(candidates, key=candidates.get)
+         best_cost = candidates[best_name]

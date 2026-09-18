@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environment
+venv/
+.venv/
+
+# OS
+.DS_Store
+
+# Simulation outputs (regenerate with main.py)
+experiments/results/*.csv
+experiments/results/charts/
+experiments/**/*.npz
+
+# Pre-fix result snapshots (kept locally, not versioned)
+experiments/results_BACKUP_*/
+pyvenv.cfg

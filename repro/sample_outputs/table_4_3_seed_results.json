@@ -1,0 +1,32 @@
+{
+ "42": {
+  "Q-Learning": 0.05743,
+  "Always Cloud": 0.06937,
+  "Always Edge": 0.07249,
+  "Greedy Heuristic": 0.05509
+ },
+ "123": {
+  "Q-Learning": 0.05764,
+  "Always Cloud": 0.0694,
+  "Always Edge": 0.0724,
+  "Greedy Heuristic": 0.05536
+ },
+ "456": {
+  "Q-Learning": 0.057404639511788334,
+  "Always Cloud": 0.06934155003820416,
+  "Always Edge": 0.07205162950511745,
+  "Greedy Heuristic": 0.05487127687442072
+ },
+ "789": {
+  "Q-Learning": 0.057778074081358315,
+  "Always Cloud": 0.0694733227776429,
+  "Always Edge": 0.07368664528286273,
+  "Greedy Heuristic": 0.05520402638329531
+ },
+ "999": {
+  "Q-Learning": 0.05760914597962532,
+  "Always Cloud": 0.06934148182977323,
+  "Always Edge": 0.0747535040642005,
+  "Greedy Heuristic": 0.05486723060697518
+ }
+}
