@@ -19,6 +19,7 @@ from src.config import (
     TASK_COMPLEXITY_MIN, TASK_COMPLEXITY_MAX,
     ACTION_LOCAL, ACTION_EDGE, ACTION_CLOUD, ACTION_NAMES,
     W_LATENCY, W_ENERGY,
+    EDGE_PROPAGATION_DELAY, CLOUD_PROPAGATION_DELAY,
     QUEUE_BINS, TASK_SIZE_BINS, NETWORK_QUALITY_BINS,
     VELOCITY_BINS, QUALITY_TREND_BINS,
     QUALITY_TRAIN_MIN, QUALITY_TRAIN_MAX,
@@ -26,7 +27,7 @@ from src.config import (
 from src.environment.task_generator import Task
 from src.environment.edge_server import EdgeServer
 from src.environment.cloud_server import CloudServer
-from src.environment.network_model import local_cost, edge_cost, cloud_cost
+from src.environment.network_model import local_cost, transmission_delay, transmission_energy
 
 
 class Simulation:
@@ -138,21 +139,30 @@ class Simulation:
         task.action_taken = action
 
         if action == ACTION_LOCAL:
-            latency, energy = local_cost(task.size_bits, task.complexity)
-            yield env.timeout(latency)
+            local_latency, energy = local_cost(task.size_bits, task.complexity)
+            yield env.timeout(local_latency)
         elif action == ACTION_EDGE:
-            queue_wait = yield env.process(edge.process(task))
-            latency, energy = edge_cost(task.size_bits, task.complexity,
-                                        sc["quality"], queue_wait)
+            network_latency = (
+                transmission_delay(task.size_bits, sc["quality"])
+                + EDGE_PROPAGATION_DELAY
+            )
+            yield env.timeout(network_latency)
+            yield env.process(edge.process(task))
+            energy = transmission_energy(task.size_bits, sc["quality"])
         else:
+            network_latency = (
+                transmission_delay(task.size_bits, sc["quality"])
+                + CLOUD_PROPAGATION_DELAY
+            )
+            yield env.timeout(network_latency)
             yield env.process(cloud.process(task))
-            latency, energy = cloud_cost(task.size_bits, task.complexity, sc["quality"])
+            energy = transmission_energy(task.size_bits, sc["quality"])
 
-        task.latency     = latency
-        task.energy      = energy
         task.finish_time = env.now
+        task.latency     = task.finish_time - task.arrival_time
+        task.energy      = energy
 
-        reward = -(self.w_latency * latency + self.w_energy * energy)
+        reward = -(self.w_latency * task.latency + self.w_energy * task.energy)
         self._episode_reward += reward
 
         if self.agent and hasattr(self.agent, 'learn'):
