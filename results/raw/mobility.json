@@ -1,0 +1,13 @@
+{
+ "seed": 42,
+ "velocity": 0.8,
+ "coverage": {
+  "states_visited": 81,
+  "state_actions_visited": 242,
+  "state_actions_total": 243,
+  "fully_explored_states": 80,
+  "total_steps": 1198441,
+  "expected_states": 324,
+  "state_coverage_pct": 25.0
+ }
+}

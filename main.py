@@ -2,12 +2,12 @@
 # main.py - CLI entry point
 #
 # Run any experiment from command line:
-#   python main.py --agent qlearning --episodes 500   # train Q-Learning
+#   python main.py --agent qlearning --episodes 500   # train Q-learning
 #   python main.py --agent qlearning --charts         # train + save 3 charts
 #   python main.py --agent qlearning --mobility --velocity 0.8   # mobility mode
 #   python main.py --agent random                     # one baseline
 #   python main.py --agent heuristic                  # greedy cost heuristic
-#   python main.py --agent all                        # all baselines + Q-Learning
+#   python main.py --agent all                        # all baselines + Q-learning
 #   python main.py --agent stats                      # 5-seed statistical validation
 #   python main.py --agent validate                   # M/M/1 simulation validity check
 # =============================================================================
@@ -78,7 +78,7 @@ def run_qlearning(episodes: int, log_dir: str,
                   charts: bool = False):
     agent = QLearningAgent()
     mode = f"mobility (velocity={velocity})" if mobility else "static"
-    print(f"Training Q-Learning agent for {episodes} episodes [{mode}]...")
+    print(f"Training Q-learning agent for {episodes} episodes [{mode}]...")
 
     for ep in range(episodes):
         sim = Simulation(
@@ -111,9 +111,10 @@ def run_qlearning(episodes: int, log_dir: str,
           f"fully-explored states {cov['fully_explored_states']}  |  "
           f"learning steps {cov['total_steps']:,}")
 
-    # Final evaluation run (no exploration), on a workload disjoint from training
+    # Final evaluation run: greedy AND frozen (no exploration, no learning),
+    # on a workload disjoint from training.
     eval_seed = eval_sim_seed(RANDOM_SEED)
-    agent.epsilon = 0.0
+    agent.freeze()
     sim = Simulation(
         agent=agent,
         seed=eval_seed,
@@ -151,7 +152,7 @@ def generate_charts(agent: QLearningAgent, log_dir: str):
                      ("Always Cloud", AlwaysCloudAgent()),
                      ("Random", RandomAgent()),
                      ("Greedy Heuristic", GreedyHeuristicAgent()),
-                     ("Q-Learning", agent)]:
+                     ("Q-learning", agent)]:
         tasks = Simulation(agent=a, seed=eval_seed,
                            network_quality=EVAL_NETWORK_QUALITY).run(duration=SIM_DURATION)
         results[label] = summary(tasks, label)
@@ -181,12 +182,12 @@ def run_pareto():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="RL Task Offloading Experiment Runner")
+    parser = argparse.ArgumentParser(description="Q-Learning Task Offloading Experiment Runner")
     parser.add_argument("--agent",    type=str, default="qlearning",
                         help="qlearning | local | edge | cloud | random | heuristic "
                              "| all | stats | validate | pareto")
     parser.add_argument("--episodes", type=int, default=NUM_EPISODES,
-                        help="Training episodes (Q-Learning only)")
+                        help="Training episodes (Q-learning only)")
     parser.add_argument("--log_dir",  type=str, default="experiments/results",
                         help="Directory to save CSV logs")
     parser.add_argument("--mobility", action="store_true",
@@ -194,7 +195,7 @@ def main():
     parser.add_argument("--velocity", type=float, default=0.0,
                         help="Device velocity 0.0=stationary .. 1.0=fast vehicle (mobility mode)")
     parser.add_argument("--charts",   action="store_true",
-                        help="Generate the 3 thesis charts after Q-Learning training")
+                        help="Generate the 3 thesis charts after Q-learning training")
     args = parser.parse_args()
 
     os.makedirs(args.log_dir, exist_ok=True)
@@ -211,7 +212,7 @@ def main():
         for name in ["local", "edge", "cloud", "random", "heuristic"]:
             run_baseline(name, args.log_dir,
                          mobility=args.mobility, velocity=args.velocity)
-        print("\n=== Training Q-Learning ===")
+        print("\n=== Training Q-learning ===")
         run_qlearning(args.episodes, args.log_dir,
                       mobility=args.mobility, velocity=args.velocity, charts=args.charts)
     elif args.agent == "qlearning":

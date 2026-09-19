@@ -1,7 +1,7 @@
 # =============================================================================
 # agent/base_agent.py
 #
-# Abstract base class for ALL agents (Q-Learning, DQN, baselines).
+# Abstract base class for ALL agents (Q-learning, DQN, baselines).
 # Every agent MUST implement act() and learn().
 #
 # WHY this matters for your thesis:
@@ -40,7 +40,7 @@ class BaseAgent(ABC):
         """
         Update internal knowledge based on one (s, a, r, s') transition.
 
-        For Q-Learning: update Q-table.
+        For Q-learning: update Q-table.
         For DQN: store in replay buffer and train neural network.
         For baselines: do nothing (override with `pass`).
         """

@@ -67,7 +67,7 @@ class GreedyHeuristicAgent(BaseAgent):
     the remaining service time of the task currently being served.
 
     This is deliberately the strongest fixed competitor. It costs nothing to
-    run, has no training phase and no memory, and any claim that Q-Learning
+    run, has no training phase and no memory, and any claim that Q-learning
     earns its complexity must be made against this, not against Always-Cloud.
     """
 

@@ -22,11 +22,13 @@ from src.config import (
     QUEUE_BINS, TASK_SIZE_BINS, NETWORK_QUALITY_BINS,
     VELOCITY_BINS, QUALITY_TREND_BINS,
     QUALITY_TRAIN_MIN, QUALITY_TRAIN_MAX,
+    EDGE_PROPAGATION_DELAY, CLOUD_PROPAGATION_DELAY, UPLINK_IN_EVENT_TIME,
 )
 from src.environment.task_generator import Task
 from src.environment.edge_server import EdgeServer
 from src.environment.cloud_server import CloudServer
-from src.environment.network_model import local_cost, edge_cost, cloud_cost
+from src.environment.network_model import (local_cost, edge_cost, cloud_cost,
+                                           transmission_delay)
 
 
 class Simulation:
@@ -52,6 +54,7 @@ class Simulation:
         use_mobility: bool = False,
         w_latency: float = W_LATENCY,
         w_energy: float = W_ENERGY,
+        uplink_in_event_time: bool = UPLINK_IN_EVENT_TIME,
     ):
         self.agent        = agent
         self.seed         = seed
@@ -63,6 +66,7 @@ class Simulation:
         # latency/energy preference without editing config.py.
         self.w_latency    = w_latency
         self.w_energy     = w_energy
+        self.uplink_in_event_time = uplink_in_event_time
 
         self.completed_tasks: List[Task] = []
         self._episode_reward = 0.0
@@ -130,23 +134,35 @@ class Simulation:
         else:
             # Agents that reason about raw (undiscretised) quantities rather
             # than the binned MDP state can opt in via set_context(). The
-            # Q-Learning agent does not implement it and is unaffected: it
+            # Q-learning agent does not implement it and is unaffected: it
             # still sees only the discrete state tuple.
             if hasattr(self.agent, "set_context"):
                 self.agent.set_context(task, edge, sc["quality"])
             action = self.agent.act(state)
         task.action_taken = action
 
+        # Channel quality seen by THIS task's uplink, captured at decision time.
+        # (In mobility mode sc["quality"] can drift while the task waits; the
+        # upload happens before the wait, so the decision-time value applies.
+        # With a fixed channel this is identical to reading sc["quality"] later.)
+        quality = sc["quality"]
+
         if action == ACTION_LOCAL:
             latency, energy = local_cost(task.size_bits, task.complexity)
             yield env.timeout(latency)
         elif action == ACTION_EDGE:
+            if self.uplink_in_event_time:
+                yield env.timeout(transmission_delay(task.size_bits, quality)
+                                  + EDGE_PROPAGATION_DELAY)
             queue_wait = yield env.process(edge.process(task))
             latency, energy = edge_cost(task.size_bits, task.complexity,
-                                        sc["quality"], queue_wait)
+                                        quality, queue_wait)
         else:
+            if self.uplink_in_event_time:
+                yield env.timeout(transmission_delay(task.size_bits, quality)
+                                  + CLOUD_PROPAGATION_DELAY)
             yield env.process(cloud.process(task))
-            latency, energy = cloud_cost(task.size_bits, task.complexity, sc["quality"])
+            latency, energy = cloud_cost(task.size_bits, task.complexity, quality)
 
         task.latency     = latency
         task.energy      = energy

@@ -2,7 +2,7 @@
 # evaluation/statistical_tests.py
 #
 # Month 2 - Statistical validation.
-# Run Q-Learning across multiple seeds and compute 95% confidence intervals.
+# Run Q-learning across multiple seeds and compute 95% confidence intervals.
 # Reports whether the measured improvement is statistically significant.
 # =============================================================================
 
@@ -29,13 +29,13 @@ assert TRAIN_EPISODES < EVAL_SEED_OFFSET < SEED_STRIDE, "eval seed must be disjo
 
 
 def train_agent(seed: int) -> QLearningAgent:
-    """Train one Q-Learning agent with a given seed."""
+    """Train one Q-learning agent with a given seed."""
     agent = QLearningAgent(seed=seed)
     for ep in range(TRAIN_EPISODES):
         sim = Simulation(agent=agent, seed=train_sim_seed(seed, ep))
         sim.run(duration=100)
         agent.end_episode()
-    agent.epsilon = 0.0   # greedy eval
+    agent.freeze()   # greedy AND frozen: evaluation must not update the Q-table
     return agent
 
 
@@ -69,7 +69,7 @@ def confidence_interval(values: list) -> tuple:
 
 def paired_t_test(ql_costs: list, base_costs: list) -> dict:
     """
-    Paired (dependent) two-tailed t-test of Q-Learning vs the best baseline.
+    Paired (dependent) two-tailed t-test of Q-learning vs the best baseline.
 
     Each seed produces a matched pair (ql_cost, base_cost) run under the SAME
     random conditions, so we test the per-seed DIFFERENCES rather than two
@@ -79,7 +79,7 @@ def paired_t_test(ql_costs: list, base_costs: list) -> dict:
         H1: mean(base_cost - ql_cost) != 0
 
     Differences are defined as (base - ql) so a POSITIVE mean difference means
-    Q-Learning is cheaper (better). The t-statistic is computed by hand so the
+    Q-learning is cheaper (better). The t-statistic is computed by hand so the
     formula is transparent for the thesis, then cross-checked against
     scipy.stats.ttest_rel.
 
@@ -142,7 +142,7 @@ def run_all(verbose: bool = True) -> dict:
     for i, seed in enumerate(SEEDS):
         print(f"  Seed {seed} ({i+1}/{len(SEEDS)}): training...", end=" ", flush=True)
 
-        # Train Q-Learning
+        # Train Q-learning
         agent = train_agent(seed)
         sim = Simulation(agent=agent, seed=eval_seed(seed),
                          network_quality=EVAL_NETWORK_QUALITY)
@@ -196,7 +196,7 @@ def run_all(verbose: bool = True) -> dict:
         print("=" * 55)
         print("  STATISTICAL VALIDATION RESULTS")
         print("=" * 55)
-        print(f"  Q-Learning composite cost:    {ql_mean:.5f} ± {ql_ci:.5f}")
+        print(f"  Q-learning composite cost:    {ql_mean:.5f} ± {ql_ci:.5f}")
         print(f"  Best baseline ({best_label}): {base_mean:.5f} ± {base_ci:.5f}")
         print(f"  Improvement vs best baseline: {imp_mean:+.2f}% ± {imp_ci:.2f}%")
         print(f"  95% CI lower bound:           {imp_mean - imp_ci:+.2f}%")

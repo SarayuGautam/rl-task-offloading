@@ -1,7 +1,7 @@
 # =============================================================================
 # agent/q_learning_agent.py
 #
-# Tabular Q-Learning agent - Module 3 of the curriculum.
+# Tabular Q-learning agent (Watkins, 1989; Watkins & Dayan, 1992).
 #
 # HOW IT WORKS:
 #   - Maintains a Q-table: Q[state][action] = expected future reward
@@ -34,7 +34,11 @@ N_ACTIONS = 3  # Local, Edge, Cloud
 
 class QLearningAgent(BaseAgent):
     """
-    Tabular Q-Learning agent with epsilon-greedy exploration.
+    Tabular Q-learning agent with epsilon-greedy exploration.
+
+    Training vs evaluation: the simulation calls learn() after every completed
+    task. Call freeze() before any evaluation run so the reported policy is the
+    one learned in training: it sets epsilon = 0 and turns learn() into a no-op.
 
     State is a tuple of discrete bin indices - the Q-table is a dict
     mapping state tuples to numpy arrays of Q-values per action.
@@ -75,6 +79,9 @@ class QLearningAgent(BaseAgent):
         self.q_table: dict = defaultdict(lambda: np.zeros(N_ACTIONS))
         self.visit_counts: dict = defaultdict(lambda: np.zeros(N_ACTIONS, dtype=np.int64))
 
+        # learn() only updates the table while training is True (see freeze()).
+        self.training = True
+
         # Tracking
         self.total_steps = 0
         self.episode_rewards = []
@@ -114,6 +121,18 @@ class QLearningAgent(BaseAgent):
         masked = np.where(tried, q, -np.inf)
         return int(np.argmax(masked))
 
+    def freeze(self):
+        """
+        Switch to pure greedy evaluation: epsilon = 0 and learning disabled.
+
+        NOTE (fix, defense-final): evaluation runs used to set only
+        `epsilon = 0.0`. The simulation still called learn() after every task,
+        so the Q-table kept adapting to the evaluation workload during the
+        "greedy" evaluation. freeze() evaluates the policy as trained.
+        """
+        self.epsilon = 0.0
+        self.training = False
+
     def is_state_trained(self, state: Tuple) -> bool:
         """True if at least one action has been tried in this state."""
         return bool((self.visit_counts[state] > 0).any())
@@ -127,6 +146,9 @@ class QLearningAgent(BaseAgent):
         only, so an unexplored successor state contributes 0 (its optimistic
         initialisation) rather than a spurious maximum over untried actions.
         """
+        if not self.training:
+            return   # frozen: evaluation must not change the learned policy
+
         current_q = self.q_table[state][action]
 
         next_tried = self.visit_counts[next_state] > 0

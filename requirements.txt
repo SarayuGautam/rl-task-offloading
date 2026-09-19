@@ -1,7 +1,6 @@
+# Exact versions used to produce every result in results/ (Python 3.11.15).
+# The pre-fix artifacts were also reproduced bit-for-bit with these versions (AUDIT.md, section 1).
 simpy==4.1.1
-numpy==1.26.4
-scipy==1.13.1
-matplotlib==3.8.4
-torch==2.11.0
-pandas==2.2.2
-jupyter==1.0.0
+numpy==2.4.4
+scipy==1.17.1
+matplotlib==3.10.9

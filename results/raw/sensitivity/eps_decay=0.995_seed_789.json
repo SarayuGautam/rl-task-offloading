@@ -1,0 +1,25 @@
+{
+ "label": "eps_decay=0.995",
+ "seed": 789,
+ "eval": {
+  "n": 6062,
+  "latency": 0.08221345612839759,
+  "energy": 0.00019542749081330216,
+  "cost": 0.057608047537122294,
+  "actions_pct": {
+   "Local": 0.0,
+   "Edge": 70.3,
+   "Cloud": 29.7
+  }
+ },
+ "coverage": {
+  "states_visited": 27,
+  "state_actions_visited": 81,
+  "state_actions_total": 81,
+  "fully_explored_states": 27,
+  "total_steps": 1198177,
+  "expected_states": 36,
+  "state_coverage_pct": 75.0
+ },
+ "convergence_episode": 572
+}
