@@ -30,7 +30,7 @@ def comparison_bar(results: dict, metric: str, save_path: str):
     """Bar chart comparing agents on a single metric."""
     labels = list(results.keys())
     values = [results[k][metric] for k in labels]
-    colors = ['#e07b54' if k == 'Q-Learning' else '#aab7c4' for k in labels]
+    colors = ['#e07b54' if k == 'Q-learning' else '#aab7c4' for k in labels]
     fig, ax = plt.subplots(figsize=(8, 4))
     bars = ax.bar(labels, values, color=colors, edgecolor='white', width=0.55)
     for bar, val in zip(bars, values):

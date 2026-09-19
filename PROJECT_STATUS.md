@@ -1,6 +1,10 @@
-# Project Status — Overall Note
+# Project Status — Overall Note (SUPERSEDED)
 
-**Project:** Reinforcement Learning for Task Offloading in 3-tier Device-Edge-Cloud Systems
+> **Superseded on 2026-09-19 by `AUDIT.md` and `results/summary.json`.** The numbers below were
+> measured while the Q-table was still being updated during evaluation (finding F-01 in `AUDIT.md`)
+> and must not be quoted. Kept only as a historical record.
+
+**Project:** Q-Learning for Task Offloading in 3-tier Device-Edge-Cloud Systems (retitled 2026-09-19; formerly "Reinforcement Learning for ...")
 **Student:** Sarayu Gautam · Kathmandu University, Dept. of CSE · EGPG 600
 **Last updated:** 2026-09-12 (final verification pass before the defense)
 

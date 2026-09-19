@@ -51,7 +51,7 @@ def _load_csv(path: str) -> list:
 
 
 def train_and_eval(w_latency: float, w_energy: float, seed: int = 42) -> dict:
-    """Train a Q-Learning agent under one weighting, then evaluate it greedily."""
+    """Train a Q-learning agent under one weighting, then evaluate it greedily (frozen)."""
     agent = QLearningAgent(seed=seed)
     for ep in range(TRAIN_EPISODES):
         sim = Simulation(agent=agent, seed=train_sim_seed(seed, ep),
@@ -59,7 +59,7 @@ def train_and_eval(w_latency: float, w_energy: float, seed: int = 42) -> dict:
         sim.run(duration=100)
         agent.end_episode()
 
-    agent.epsilon = 0.0  # greedy evaluation
+    agent.freeze()  # greedy, frozen evaluation (no learning on the eval workload)
     tasks = Simulation(agent=agent, seed=eval_sim_seed(seed),
                        network_quality=EVAL_NETWORK_QUALITY,
                        w_latency=w_latency, w_energy=w_energy).run(duration=EVAL_DURATION)
@@ -144,7 +144,7 @@ def _plot(rows: list, save_path: str):
     ax.set_ylabel("Average energy (J)", fontsize=12)
     ax.set_title(
         "Pareto trade-off: latency vs energy\n"
-        "(each point = Q-Learning agent trained under one weighting)",
+        "(each point = Q-learning agent trained under one weighting)",
         fontsize=12,
     )
     ax.tick_params(labelsize=10)

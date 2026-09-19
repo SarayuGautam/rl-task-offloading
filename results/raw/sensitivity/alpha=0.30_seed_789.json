@@ -1,0 +1,25 @@
+{
+ "label": "alpha=0.30",
+ "seed": 789,
+ "eval": {
+  "n": 6062,
+  "latency": 0.08574325248576377,
+  "energy": 0.00019542749081330216,
+  "cost": 0.06007890498727862,
+  "actions_pct": {
+   "Local": 0.0,
+   "Edge": 78.0,
+   "Cloud": 22.0
+  }
+ },
+ "coverage": {
+  "states_visited": 27,
+  "state_actions_visited": 81,
+  "state_actions_total": 81,
+  "fully_explored_states": 27,
+  "total_steps": 1197607,
+  "expected_states": 36,
+  "state_coverage_pct": 75.0
+ },
+ "convergence_episode": 1377
+}

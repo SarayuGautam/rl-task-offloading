@@ -79,7 +79,18 @@ QUALITY_TRAIN_MAX = 1.0
 # measured under identical, documented channel conditions.
 EVAL_NETWORK_QUALITY = 0.9
 
-# Q-Learning
+# ── Uplink timing (robustness check only) ────────────────────────────────
+# False (default; used for EVERY reported result): an offloaded task enters the
+# edge queue at its generation instant, and its uplink transmission and
+# propagation delays are added analytically to its latency
+# (network_model.edge_cost / cloud_cost).
+# True: the task first spends its transmission + propagation time in simulated
+# time and only then joins the edge queue (the change proposed on the unmerged
+# branch fix/step1-simulated-network-time). The latency formula is identical;
+# only the instants at which tasks join the edge queue differ.
+UPLINK_IN_EVENT_TIME = False
+
+# Q-learning hyperparameters (the single configuration used for all results)
 LEARNING_RATE   = 0.15
 DISCOUNT_FACTOR = 0.9
 EPSILON_START   = 1.0

@@ -15,7 +15,7 @@ class EdgeServer:
     Simulates a nearby MEC server: ONE server, FIFO, UNBOUNDED queue.
 
     Uses simpy.Resource so tasks automatically queue when the server
-    is busy - this creates realistic queue_wait times that the RL agent
+    is busy - this creates realistic queue_wait times that the Q-learning agent
     must learn to avoid.
 
     NOTE (fix, Aug 2026): `capacity=1` is the number of SERVERS, not a queue

@@ -1,0 +1,36 @@
+{
+ "seed": 42,
+ "coverage": {
+  "states_visited": 26,
+  "state_actions_visited": 67,
+  "state_actions_total": 78,
+  "fully_explored_states": 19,
+  "total_steps": 1199344,
+  "expected_states": 36,
+  "state_coverage_pct": 72.2
+ },
+ "eval_table42": {
+  "Q-learning": {
+   "n": 59941,
+   "latency": 0.08970402298289093,
+   "energy": 0.00019469689018833123,
+   "cost": 0.06285122515508014,
+   "actions_pct": {
+    "Local": 0.0,
+    "Edge": 92.1,
+    "Cloud": 7.9
+   }
+  },
+  "Always-Cloud": {
+   "n": 59941,
+   "latency": 0.09900993859044703,
+   "energy": 0.0001946968901883312,
+   "cost": 0.06936536608036942,
+   "actions_pct": {
+    "Local": 0.0,
+    "Edge": 0.0,
+    "Cloud": 100.0
+   }
+  }
+ }
+}
