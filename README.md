@@ -58,10 +58,3 @@ report/                        original report (untouched), v2 report (.docx + .
 AUDIT.md                       audit log: findings, claim ledger, open TODO(HUMAN) items
 DEFENSE_PREP.md                pitch, key numbers, likely questions
 ```
-
-## Notes
-
-- The repository is still named `rl-task-offloading`; renaming the GitHub repository is left to the
-  owner. The project title is now *Q-Learning for Task Offloading*.
-- `PROJECT_STATUS.md` is a superseded historical note. Its numbers predate the evaluation fix and must
-  not be quoted.
